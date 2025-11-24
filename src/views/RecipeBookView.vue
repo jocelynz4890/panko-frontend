@@ -3,13 +3,16 @@
     <div v-if="loading" class="loading">Loading...</div>
     <div v-if="error" class="error">{{ error }}</div>
     
-    <div v-if="book" class="notebook-wrapper">
-      <div class="notebook">
-        <!-- Spiral binding -->
-        <div class="spiral-binding"></div>
-        
-        <!-- Book pages -->
-        <div class="pages-container">
+    <div v-if="book" class="recipe-book-page-wrapper">
+      <!-- Book header with name - Outside the book -->
+      <div class="book-header">
+        <h1 class="book-name">{{ book.name }}</h1>
+      </div>
+      
+      <div class="notebook-wrapper">
+        <div class="notebook">
+          <!-- Book pages -->
+          <div class="pages-container">
           <div class="page left-page" :class="{ 'page-flipped': currentPage > 0 }">
             <div v-if="currentView === 'contents'" class="contents-view">
               <div class="contents-header">
@@ -106,22 +109,6 @@
           </div>
         </div>
         
-        <!-- Page navigation -->
-        <div class="page-navigation">
-          <button
-            @click="previousPage"
-            :disabled="currentPage === 0"
-            class="nav-button prev"
-          >
-            ← Previous
-          </button>
-          <button
-            @click="nextPage"
-            :disabled="!hasNextPage"
-            class="nav-button next"
-          >
-            Next →
-          </button>
         </div>
       </div>
     </div>
@@ -129,7 +116,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onActivated } from 'vue'
+import { ref, computed, onMounted, onActivated, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useRecipeBooksStore } from '../stores/recipeBooks'
 import { useRecipesStore } from '../stores/recipes'
@@ -149,6 +136,15 @@ const currentView = ref('contents')
 const currentPage = ref(0)
 const addingRecipe = ref(false)
 
+// Check for view query parameter
+onMounted(() => {
+  const viewParam = route.query.view
+  if (viewParam === 'rankings') {
+    currentView.value = 'rankings'
+  }
+  loadBookData()
+})
+
 const sortedRecipes = computed(() => {
   return [...recipes.value].sort((a, b) => a.name.localeCompare(b.name))
 })
@@ -164,15 +160,18 @@ async function loadBookData() {
   
   try {
     const bookId = route.params.id
+    // Clear existing recipes first to force reload
+    recipes.value = []
+    
+    // Always fetch fresh book data (no caching)
     book.value = await recipeBooksStore.fetchBook(bookId)
     
     // Load all recipes for this book
     if (book.value?.recipes?.length > 0) {
-      recipes.value = []
-      
       // Load recipes and their snapshots
       for (const recipeId of book.value.recipes) {
         try {
+          // Fetch fresh recipe data
           await recipesStore.fetchRecipe(recipeId)
           const recipe = recipesStore.currentRecipe
           if (recipe) {
@@ -187,8 +186,6 @@ async function loadBookData() {
           console.error(`Failed to load recipe ${recipeId}:`, err)
         }
       }
-    } else {
-      recipes.value = []
     }
   } catch (err) {
     error.value = err.message || 'Failed to load recipe book'
@@ -243,7 +240,8 @@ function nextPage() {
 }
 
 function openRecipe(recipeId, snapshotId = null) {
-  router.push(`/recipe/${recipeId}${snapshotId ? `?snapshot=${snapshotId}` : ''}`)
+  const bookId = route.params.id
+  router.push(`/recipe/${recipeId}${snapshotId ? `?snapshot=${snapshotId}` : ''}${bookId ? `&book=${bookId}` : ''}`)
 }
 
 async function handleAddRecipe() {
@@ -263,7 +261,7 @@ async function handleAddRecipe() {
   sessionStorage.setItem('pendingRecipeBook', book.value._id)
   
   // Navigate immediately - don't wait for API calls
-  router.push(`/recipe/${tempId}`)
+  router.push(`/recipe/${tempId}?book=${book.value._id}`)
   
   // Try to create the recipe in the background (non-blocking)
   // The recipe page will also try to create it if it doesn't exist
@@ -290,12 +288,37 @@ async function handleAddRecipe() {
     })
 }
 
-onMounted(() => {
+// Reload book data when returning to this page (if using keep-alive)
+onActivated(() => {
+  const viewParam = route.query.view
+  if (viewParam === 'rankings') {
+    currentView.value = 'rankings'
+  } else {
+    currentView.value = 'contents'
+  }
+  // Always reload to get fresh data (especially after adding recipes)
   loadBookData()
 })
 
-// Reload book data when returning to this page (if using keep-alive)
-onActivated(() => {
+// Also watch for route changes to reload
+watch(() => route.params.id, () => {
+  loadBookData()
+})
+
+// Watch for refresh query param or view changes
+watch(() => route.query.view, (newView) => {
+  if (newView === 'rankings') {
+    currentView.value = 'rankings'
+  } else {
+    currentView.value = 'contents'
+  }
+  // Reload when view changes
+  loadBookData()
+})
+
+// Watch for refresh query param
+watch(() => route.query.refresh, () => {
+  // Reload when refresh param changes
   loadBookData()
 })
 </script>
@@ -306,7 +329,32 @@ onActivated(() => {
   padding: 2rem;
   display: flex;
   justify-content: center;
+  align-items: flex-start;
+  padding-top: 2rem;
+}
+
+.recipe-book-page-wrapper {
+  width: 100%;
+  max-width: 1600px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Book header - Outside the book */
+.book-header {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
+  width: 100%;
+  padding: 0 1rem;
+}
+
+.book-name {
+  font-size: 1.5rem;
+  color: var(--color-dark-brown);
+  margin: 0;
+  font-weight: 600;
 }
 
 .loading, .error {
@@ -321,49 +369,104 @@ onActivated(() => {
 
 .notebook-wrapper {
   width: 100%;
-  max-width: 900px;
+  max-width: 1600px;
   position: relative;
+  /* Brown background shows through as book cover */
+  background-color: var(--color-dark-brown);
+  padding: 1rem;
+  border-radius: 8px;
 }
 
 .notebook {
   position: relative;
-  background-color: #f5f5dc;
+  /* Custom book background - shared with RecipeView */
+  background: 
+    repeating-linear-gradient(
+      0deg,
+      rgba(139, 115, 85, 0.03) 0px,
+      transparent 1px,
+      transparent 2px,
+      rgba(139, 115, 85, 0.03) 3px
+    ),
+    radial-gradient(circle at 20% 50%, rgba(250, 235, 215, 0.3) 0%, transparent 50%),
+    radial-gradient(circle at 80% 50%, rgba(250, 235, 215, 0.3) 0%, transparent 50%),
+    linear-gradient(135deg, #f5f5dc 0%, #fef9e7 50%, #f5f5dc 100%);
+  background-size: 100% 4px, 100% 100%, 100% 100%, 100% 100%;
   border-radius: 8px;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
   padding: 2rem;
-  min-height: 600px;
-}
-
-.spiral-binding {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 30px;
-  background: repeating-linear-gradient(
-    to bottom,
-    #8B7355 0px,
-    #8B7355 8px,
-    transparent 8px,
-    transparent 16px
-  );
-  border-radius: 8px 0 0 8px;
+  min-height: 800px;
+  filter: contrast(1.05) brightness(0.98);
 }
 
 .pages-container {
-  margin-left: 30px;
   display: flex;
-  gap: 2px;
-  min-height: 600px;
+  gap: 0;
+  min-height: 800px;
+  position: relative;
+}
+
+/* Page binding gradient in the middle - smoother */
+.pages-container::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 24px;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(139, 115, 85, 0.06) 15%,
+    rgba(139, 115, 85, 0.10) 30%,
+    rgba(111, 78, 55, 0.15) 50%,
+    rgba(139, 115, 85, 0.10) 70%,
+    rgba(139, 115, 85, 0.06) 85%,
+    transparent 100%
+  );
+  z-index: 2;
+  box-shadow: 
+    inset -2px 0 6px rgba(0, 0, 0, 0.08),
+    inset 2px 0 6px rgba(0, 0, 0, 0.08);
 }
 
 .page {
   flex: 1;
+  /* Paper background - no gradient */
   background-color: #FFF8DC;
   padding: 2rem;
-  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.05);
+  box-shadow: 
+    inset 0 0 20px rgba(0, 0, 0, 0.03),
+    inset 0 0 60px rgba(139, 115, 85, 0.02);
   position: relative;
-  min-height: 600px;
+  min-height: 800px;
+}
+
+/* 3D shadows for page depth */
+.left-page {
+  border-radius: 8px 0 0 8px;
+  /* 3D shadow effect - pages stacked */
+  box-shadow: 
+    inset 0 0 20px rgba(0, 0, 0, 0.03),
+    inset 0 0 60px rgba(139, 115, 85, 0.02),
+    -8px 0 16px rgba(0, 0, 0, 0.15),
+    -4px 0 8px rgba(0, 0, 0, 0.1),
+    -2px 0 4px rgba(0, 0, 0, 0.08);
+  /* Ensure consistent height */
+  display: flex;
+  flex-direction: column;
+  min-height: 800px;
+}
+
+.right-page {
+  border-radius: 0 8px 8px 0;
+  /* 3D shadow effect - pages stacked */
+  box-shadow: 
+    inset 0 0 20px rgba(0, 0, 0, 0.03),
+    inset 0 0 60px rgba(139, 115, 85, 0.02),
+    8px 0 16px rgba(0, 0, 0, 0.15),
+    4px 0 8px rgba(0, 0, 0, 0.1),
+    2px 0 4px rgba(0, 0, 0, 0.08);
 }
 
 .page::before {
@@ -465,8 +568,12 @@ onActivated(() => {
   font-style: italic;
 }
 
+.contents-view,
 .rankings-view {
-  height: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
 }
 
 .rating-section {
@@ -556,30 +663,6 @@ onActivated(() => {
   width: 50px;
 }
 
-.page-navigation {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 1rem;
-  padding: 0 2rem;
-}
-
-.nav-button {
-  padding: 0.5rem 1rem;
-  background-color: var(--color-light-brown);
-  color: var(--color-dark-brown);
-  border-radius: 4px;
-  font-size: 0.9rem;
-  transition: background-color 0.2s;
-}
-
-.nav-button:hover:not(:disabled) {
-  background-color: var(--color-gold);
-}
-
-.nav-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 
 @media (max-width: 768px) {
   .notebook {
@@ -588,10 +671,9 @@ onActivated(() => {
   
   .pages-container {
     flex-direction: column;
-    margin-left: 0;
   }
   
-  .spiral-binding {
+  .pages-container::before {
     display: none;
   }
   

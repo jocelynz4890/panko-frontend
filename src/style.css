@@ -15,9 +15,22 @@
 
 body {
   font-family: 'Georgia', 'Times New Roman', serif;
-  background-color: var(--color-cream);
+  /* Crafty paper background */
+  background: 
+    repeating-linear-gradient(
+      0deg,
+      rgba(139, 115, 85, 0.02) 0px,
+      transparent 1px,
+      transparent 2px,
+      rgba(139, 115, 85, 0.02) 3px
+    ),
+    radial-gradient(circle at 50% 50%, rgba(250, 235, 215, 0.2) 0%, transparent 70%),
+    linear-gradient(135deg, var(--color-cream) 0%, #fef9e7 50%, var(--color-cream) 100%);
+  background-size: 100% 4px, 100% 100%, 100% 100%;
   color: var(--color-dark-brown);
   line-height: 1.6;
+  /* Subtle grain */
+  filter: contrast(1.02) brightness(0.99);
 }
 
 button {
@@ -25,6 +38,12 @@ button {
   cursor: pointer;
   border: none;
   background: none;
+  /* Crafty hand-drawn feel */
+  transition: all 0.2s ease;
+}
+
+button:active {
+  transform: scale(0.98);
 }
 
 input, textarea {
