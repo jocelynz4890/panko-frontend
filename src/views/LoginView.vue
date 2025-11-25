@@ -2,7 +2,7 @@
   <div class="login-container">
     <div class="login-card">
       <img src="/assets/panko_logo.png" alt="Panko Logo" class="login-logo" />
-      <h1>{{ isLogin ? 'Welcome Back' : 'Create Account' }}</h1>
+      <h1>{{ isLogin ? "Let's cook up some memories!" : 'Start your recipe journey' }}</h1>
       
       <form @submit.prevent="handleSubmit" class="login-form">
         <div class="form-group">
@@ -124,7 +124,7 @@ async function handleSubmit() {
 }
 
 .login-logo {
-  height: 60px;
+  height: 120px;
   width: auto;
   margin-bottom: 1.5rem;
 }
