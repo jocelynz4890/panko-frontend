@@ -90,44 +90,44 @@ export const recipeBookAPI = {
 // Recipe API
 export const recipeAPI = {
   createRecipe: (user, name, description) => 
-    api.post('/Recipe/createRecipe', { user, name, description }),
+    api.post('/Recipes/createRecipe', { user, name, description }),
   
   editRecipeName: (recipe, newName, description) => 
-    api.post('/Recipe/editRecipeName', { recipe, newName, description }),
+    api.post('/Recipes/editRecipeName', { recipe, newName, description }),
   
   deleteRecipe: (recipe) => 
-    api.post('/Recipe/deleteRecipe', { recipe }),
+    api.post('/Recipes/deleteRecipe', { recipe }),
   
   getRecipe: (recipe) => 
-    api.post('/Recipe/_getRecipe', { recipe }),
+    api.post('/Recipes/_getRecipe', { recipe }),
   
   addSnapshot: (snapshot, recipe) => 
-    api.post('/Recipe/addSnapshot', { snapshot, recipe }),
+    api.post('/Recipes/addSnapshot', { snapshot, recipe }),
   
   removeSnapshot: (snapshot, recipe) => 
-    api.post('/Recipe/removeSnapshot', { snapshot, recipe }),
+    api.post('/Recipes/removeSnapshot', { snapshot, recipe }),
   
   setDefaultSnapshot: (snapshot, recipe) => 
-    api.post('/Recipe/setDefaultSnapshot', { snapshot, recipe })
+    api.post('/Recipes/setDefaultSnapshot', { snapshot, recipe })
 }
 
 // Snapshot API
 export const snapshotAPI = {
   createSnapshot: (user, ingredientsList, subname, pictures, date, instructions, note, ranking, recipe) => 
-    api.post('/Snapshots/createSnapshot', { 
+    api.post('/Snapshot/createSnapshot', { 
       user, ingredientsList, subname, pictures, date, instructions, note, ranking, recipe 
     }),
   
   editSnapshot: (snapshot, ingredientsList, subname, pictures, date, instructions, note, ranking) => 
-    api.post('/Snapshots/editSnapshot', { 
+    api.post('/Snapshot/editSnapshot', { 
       snapshot, ingredientsList, subname, pictures, date, instructions, note, ranking 
     }),
   
   deleteSnapshot: (snapshot) => 
-    api.post('/Snapshots/deleteSnapshot', { snapshot }),
+    api.post('/Snapshot/deleteSnapshot', { snapshot }),
   
   getSnapshots: (recipe) => 
-    api.post('/Snapshots/_getSnapshots', { recipe })
+    api.post('/Snapshot/_getSnapshots', { recipe })
 }
 
 // Calendar API
