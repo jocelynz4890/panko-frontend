@@ -2,7 +2,7 @@ import axios from 'axios'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE,
   headers: {
     'Content-Type': 'application/json'
   },
@@ -90,44 +90,44 @@ export const recipeBookAPI = {
 // Recipe API
 export const recipeAPI = {
   createRecipe: (user, name, description) => 
-    api.post('/Recipes/createRecipe', { user, name, description }),
+    api.post('/Recipe/createRecipe', { user, name, description }),
   
   editRecipeName: (recipe, newName, description) => 
-    api.post('/Recipes/editRecipeName', { recipe, newName, description }),
+    api.post('/Recipe/editRecipeName', { recipe, newName, description }),
   
   deleteRecipe: (recipe) => 
-    api.post('/Recipes/deleteRecipe', { recipe }),
+    api.post('/Recipe/deleteRecipe', { recipe }),
   
   getRecipe: (recipe) => 
-    api.post('/Recipes/_getRecipe', { recipe }),
+    api.post('/Recipe/_getRecipe', { recipe }),
   
   addSnapshot: (snapshot, recipe) => 
-    api.post('/Recipes/addSnapshot', { snapshot, recipe }),
+    api.post('/Recipe/addSnapshot', { snapshot, recipe }),
   
   removeSnapshot: (snapshot, recipe) => 
-    api.post('/Recipes/removeSnapshot', { snapshot, recipe }),
+    api.post('/Recipe/removeSnapshot', { snapshot, recipe }),
   
   setDefaultSnapshot: (snapshot, recipe) => 
-    api.post('/Recipes/setDefaultSnapshot', { snapshot, recipe })
+    api.post('/Recipe/setDefaultSnapshot', { snapshot, recipe })
 }
 
 // Snapshot API
 export const snapshotAPI = {
   createSnapshot: (user, ingredientsList, subname, pictures, date, instructions, note, ranking, recipe) => 
-    api.post('/Snapshot/createSnapshot', { 
+    api.post('/Snapshots/createSnapshot', { 
       user, ingredientsList, subname, pictures, date, instructions, note, ranking, recipe 
     }),
   
   editSnapshot: (snapshot, ingredientsList, subname, pictures, date, instructions, note, ranking) => 
-    api.post('/Snapshot/editSnapshot', { 
+    api.post('/Snapshots/editSnapshot', { 
       snapshot, ingredientsList, subname, pictures, date, instructions, note, ranking 
     }),
   
   deleteSnapshot: (snapshot) => 
-    api.post('/Snapshot/deleteSnapshot', { snapshot }),
+    api.post('/Snapshots/deleteSnapshot', { snapshot }),
   
   getSnapshots: (recipe) => 
-    api.post('/Snapshot/_getSnapshots', { recipe })
+    api.post('/Snapshots/_getSnapshots', { recipe })
 }
 
 // Calendar API
