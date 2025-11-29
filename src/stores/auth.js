@@ -140,30 +140,18 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     try {
-      // Try validateToken first (API spec format)
-      try {
-        const response = await authAPI.validateToken(storedUser, storedToken)
-        const data = response.data
-        if (data.error) {
-          throw new Error(data.error)
-        }
-        setAuth(storedUser, storedToken, storedUsername || '')
-        return true
-      } catch (err) {
-        // If validateToken fails, try validateSession (concept method)
-        console.log('validateToken failed, trying validateSession')
-        const response = await authAPI.validateSession(storedToken)
-        const data = response.data
-        if (data.error) {
-          throw new Error(data.error)
-        }
-        // Verify the user matches
-        if (data.user !== storedUser) {
-          throw new Error('Token user mismatch')
-        }
-        setAuth(storedUser, storedToken, storedUsername || '')
-        return true
+      // Use validateSession to check if the token is still valid
+      const response = await authAPI.validateSession(storedToken)
+      const data = response.data
+      if (data.error) {
+        throw new Error(data.error)
       }
+      // Verify the user matches
+      if (data.user !== storedUser) {
+        throw new Error('Token user mismatch')
+      }
+      setAuth(storedUser, storedToken, storedUsername || '')
+      return true
     } catch (error) {
       console.error('Token validation failed:', error)
       clearAuth()

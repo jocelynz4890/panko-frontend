@@ -56,9 +56,6 @@ export const authAPI = {
   createSession: (user) => 
     api.post('/Authentication/createSession', { user }),
   
-  validateToken: (user, token) => 
-    api.post('/Authentication/validateToken', { user, token }),
-  
   validateSession: (token) => 
     api.post('/Authentication/validateSession', { token })
 }
@@ -125,6 +122,9 @@ export const snapshotAPI = {
   
   deleteSnapshot: (snapshot) => 
     api.post('/Snapshot/deleteSnapshot', { snapshot }),
+  
+  deleteAllSnapshotsForRecipe: (recipe) => 
+    api.post('/Snapshot/deleteAllSnapshotsForRecipe', { recipe }),
   
   getSnapshots: (recipe) => 
     api.post('/Snapshot/_getSnapshots', { recipe })
