@@ -209,7 +209,7 @@ onMounted(async () => {
 .book-cover {
   width: 100%;
   aspect-ratio: 3/4;
-  background-color: var(--color-light-brown);
+  background: transparent;
   border-radius: 4px;
   overflow: hidden;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -308,6 +308,7 @@ onMounted(async () => {
   overflow-x: auto;
   padding: 1rem 0;
   scroll-snap-type: x mandatory;
+  background: transparent;
 }
 
 .cover-option {
@@ -320,13 +321,15 @@ onMounted(async () => {
   transition: all 0.3s ease;
   scroll-snap-align: center;
   overflow: hidden;
-  background-color: var(--color-light-brown);
+  background: transparent;
 }
 
 .cover-option img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  padding: 4px;
+  box-sizing: border-box;
 }
 
 .cover-option.selected {
