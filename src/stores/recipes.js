@@ -19,11 +19,19 @@ export const useRecipesStore = defineStore('recipes', () => {
       currentRecipe.value = response.data[0]
       
       // Fetch snapshots for this recipe
-      if (currentRecipe.value?.snapshots?.length > 0) {
+      // Only clear snapshots if the recipe explicitly has no snapshots
+      // If we already have snapshots for this recipe, preserve them
+      const hasSnapshotsInRecipe = currentRecipe.value?.snapshots?.length > 0
+      const existingSnapshotsAreForThisRecipe = snapshots.value.length > 0 && 
+        snapshots.value.some(s => s.recipe === recipeId)
+      
+      if (hasSnapshotsInRecipe) {
         await fetchSnapshots(recipeId)
-      } else {
+      } else if (!existingSnapshotsAreForThisRecipe) {
+        // Only clear if we don't have snapshots for this recipe already
         snapshots.value = []
       }
+      // Preserve existing snapshots if they're for this recipe
       
       return currentRecipe.value
     } catch (err) {
@@ -146,7 +154,13 @@ export const useRecipesStore = defineStore('recipes', () => {
     error.value = null
     try {
       await recipeAPI.setDefaultSnapshot(snapshotId, recipeId)
-      await fetchRecipe(recipeId)
+      // Update the defaultSnapshot field locally without full reload
+      // Only update if currentRecipe exists and matches - be careful not to trigger reloads
+      if (currentRecipe.value && currentRecipe.value._id === recipeId) {
+        // Use Object.assign to update the field without replacing the object
+        Object.assign(currentRecipe.value, { defaultSnapshot: snapshotId })
+      }
+      // Don't call fetchRecipe - just update the field to avoid clearing snapshots/view
     } catch (err) {
       error.value = err.message || 'Failed to set default snapshot'
       throw err

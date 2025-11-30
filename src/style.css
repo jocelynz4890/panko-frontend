@@ -15,6 +15,14 @@
 
 body {
   font-family: 'Georgia', 'Times New Roman', serif;
+  color: var(--color-dark-brown);
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+}
+
+/* Move filter to #app instead of body to avoid breaking fixed positioning */
+#app {
   /* Crafty paper background */
   background: 
     repeating-linear-gradient(
@@ -27,8 +35,7 @@ body {
     radial-gradient(circle at 50% 50%, rgba(250, 235, 215, 0.2) 0%, transparent 70%),
     linear-gradient(135deg, var(--color-cream) 0%, #fef9e7 50%, var(--color-cream) 100%);
   background-size: 100% 4px, 100% 100%, 100% 100%;
-  color: var(--color-dark-brown);
-  line-height: 1.6;
+  min-height: 100vh;
   /* Subtle grain */
   filter: contrast(1.02) brightness(0.99);
 }

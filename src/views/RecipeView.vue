@@ -34,18 +34,35 @@
               class="recipe-name-input"
               @blur="handleRecipeNameBlur"
             />
-            <h2 
-              v-if="!editMode"
-              class="snapshot-name"
-            >
-              {{ currentSnapshot?.subname || (isNewSnapshot ? editableSnapshot.subname || 'New Snapshot' : 'No snapshots yet') }}
-            </h2>
-            <input
-              v-else
-              v-model="editableSnapshot.subname"
-              class="snapshot-name-input"
-              placeholder="Snapshot name"
-            />
+            <div class="snapshot-header-row">
+              <h2 
+                v-if="!editMode"
+                class="snapshot-name"
+              >
+                {{ currentSnapshot?.subname || (isNewSnapshot ? editableSnapshot.subname || 'New Snapshot' : 'No snapshots yet') }}
+              </h2>
+              <input
+                v-else
+                v-model="editableSnapshot.subname"
+                class="snapshot-name-input"
+                placeholder="Snapshot name"
+              />
+              <button
+                v-if="!isNewSnapshot && currentSnapshot && recipe && currentSnapshot._id !== recipe.defaultSnapshot"
+                @click="setAsDefault(currentSnapshot._id)"
+                class="set-default-header-btn"
+                title="Set as default snapshot"
+              >
+                ⭐ Set as Default
+              </button>
+              <span
+                v-if="!isNewSnapshot && currentSnapshot && recipe && currentSnapshot._id === recipe.defaultSnapshot"
+                class="default-badge"
+                title="This is the default snapshot"
+              >
+                ⭐ Default
+              </span>
+            </div>
           </div>
           
           <div class="recipe-image-container" :class="{ editable: editMode }">
@@ -101,11 +118,6 @@
               <div
                 class="snapshot-tab new-tab"
                 :class="{ active: isNewSnapshot }"
-                :style="{ 
-                  zIndex: isNewSnapshot ? 100 : (sortedSnapshots.length + 11),
-                  marginTop: `0px`,
-                  marginLeft: `0px`
-                }"
                 @click="createNewSnapshot"
               >
                 + New
@@ -120,23 +132,10 @@
                   active: currentSnapshotIndex === index && !isNewSnapshot, 
                   default: recipe && snapshot._id === recipe.defaultSnapshot 
                 }"
-                :style="{ 
-                  zIndex: currentSnapshotIndex === index && !isNewSnapshot ? 100 : (sortedSnapshots.length - index + 10),
-                  marginTop: `${(index + 1) * 6}px`,
-                  marginLeft: `${(index + 1) * 3}px`
-                }"
                 @click="switchSnapshot(index)"
               >
                 <span class="tab-label">{{ formatDateShort(snapshot.date) || snapshot.subname || `Snapshot ${index + 1}` }}</span>
-                <span v-if="recipe && snapshot._id === recipe.defaultSnapshot" class="default-icon" title="Default">⭐</span>
-                <button
-                  v-if="editMode && recipe && snapshot._id !== recipe.defaultSnapshot"
-                  @click.stop="setAsDefault(snapshot._id)"
-                  class="set-default-btn"
-                  title="Set as default"
-                >
-                  ⭐
-                </button>
+                <span v-if="recipe && snapshot._id === recipe.defaultSnapshot" class="default-icon" title="Default Snapshot">⭐</span>
               </div>
               </div>
             </div>
@@ -248,6 +247,7 @@ const editableSnapshot = ref({
   pictures: []
 })
 const tabsContainer = ref(null)
+const snapshotsBackup = ref([])
 
 // Sort snapshots by date, newest first (for display: New button, then newest, then older)
 const sortedSnapshots = computed(() => {
@@ -326,7 +326,8 @@ async function loadRecipe() {
         await recipesStore.fetchRecipe(recipeId)
         const fetchedRecipe = recipesStore.currentRecipe
         if (fetchedRecipe) {
-          recipe.value = fetchedRecipe
+          // Create a separate copy to avoid reactivity issues
+          recipe.value = { ...fetchedRecipe }
           editableRecipeName.value = fetchedRecipe.name
         }
       } catch (fetchErr) {
@@ -338,6 +339,10 @@ async function loadRecipe() {
       // Load snapshots if recipe exists and has snapshots
       if (recipe.value && recipe.value.snapshots && recipe.value.snapshots.length > 0) {
         await recipesStore.fetchSnapshots(recipe.value._id)
+        // Update backup after loading
+        if (recipesStore.snapshots.length > 0) {
+          snapshotsBackup.value = [...recipesStore.snapshots]
+        }
       }
       
       if (recipe.value && sortedSnapshots.value.length > 0) {
@@ -669,6 +674,10 @@ async function saveSnapshot() {
         
         // Reload snapshots
         await recipesStore.fetchSnapshots(recipeId)
+        // Update backup after fetching
+        if (recipesStore.snapshots.length > 0) {
+          snapshotsBackup.value = [...recipesStore.snapshots]
+        }
         // After creating, switch to the newly created snapshot (it will be index 0 - newest)
         // Then prepare a new empty snapshot tab
         if (sortedSnapshots.value.length > 0) {
@@ -803,11 +812,65 @@ async function updateRecipeName() {
 
 async function setAsDefault(snapshotId) {
   if (!recipe.value) return
+  
+  // Save current state - create immutable backup
+  const snapshotsBefore = [...recipesStore.snapshots]
+  const currentSnapshotIndexBefore = currentSnapshotIndex.value
+  const currentSnapshotIdBefore = currentSnapshot.value?._id
+  
+  // Update backup ref so watcher can restore if needed
+  snapshotsBackup.value = [...snapshotsBefore]
+  
   try {
-    await recipesStore.setDefaultSnapshot(snapshotId, recipe.value._id)
-    await loadRecipe()
+    // Make the API call directly - don't use store method to avoid side effects
+    const { recipeAPI } = await import('../api/api')
+    await recipeAPI.setDefaultSnapshot(snapshotId, recipe.value._id)
+    
+    // Update the local recipe ref
+    if (recipe.value) {
+      recipe.value.defaultSnapshot = snapshotId
+    }
+    
+    // IMPORTANT: Also update store's currentRecipe so calendar and other views see the change
+    // This ensures that if the calendar has this recipe loaded, it will see the updated default
+    if (recipesStore.currentRecipe && recipesStore.currentRecipe._id === recipe.value._id) {
+      recipesStore.currentRecipe.defaultSnapshot = snapshotId
+      // Force reactivity update
+      recipesStore.currentRecipe = { ...recipesStore.currentRecipe }
+    }
+    
+    // Check and restore snapshots immediately
+    if (recipesStore.snapshots.length === 0 && snapshotsBefore.length > 0) {
+      console.error('Snapshots were cleared! Restoring immediately.')
+      recipesStore.snapshots = [...snapshotsBefore]
+    }
+    
+    // Wait for any reactivity updates
+    await nextTick()
+    
+    // Check again after nextTick - restore if still cleared
+    if (recipesStore.snapshots.length === 0 && snapshotsBefore.length > 0) {
+      console.error('Snapshots still cleared after nextTick! Restoring again.')
+      recipesStore.snapshots = [...snapshotsBefore]
+    }
+    
+    // Ensure we stay on the same snapshot
+    if (!isNewSnapshot.value && currentSnapshotIdBefore) {
+      const restoredIndex = sortedSnapshots.value.findIndex(s => s._id === currentSnapshotIdBefore)
+      if (restoredIndex !== -1) {
+        currentSnapshotIndex.value = restoredIndex
+        isNewSnapshot.value = false
+      }
+    }
+    
   } catch (err) {
+    console.error('Error setting default snapshot:', err)
     error.value = err.message || 'Failed to set default snapshot'
+    
+    // Always restore snapshots on error
+    if (recipesStore.snapshots.length === 0 && snapshotsBefore.length > 0) {
+      recipesStore.snapshots = [...snapshotsBefore]
+    }
   }
 }
 
@@ -866,11 +929,33 @@ function goToRankings() {
   }
 }
 
-watch(() => recipesStore.snapshots, () => {
+// Watch snapshots to restore if cleared and update backup
+watch(() => recipesStore.snapshots, (newSnapshots, oldSnapshots) => {
+  // CRITICAL: If snapshots were cleared unexpectedly, restore from backup immediately
+  if (oldSnapshots && oldSnapshots.length > 0 && newSnapshots.length === 0 && snapshotsBackup.value.length > 0) {
+    console.error('Snapshots were cleared unexpectedly - restoring from backup IMMEDIATELY', {
+      oldCount: oldSnapshots.length,
+      newCount: newSnapshots.length,
+      backupCount: snapshotsBackup.value.length
+    })
+    // Use nextTick to ensure this runs after any clearing operation
+    nextTick(() => {
+      if (recipesStore.snapshots.length === 0 && snapshotsBackup.value.length > 0) {
+        recipesStore.snapshots = [...snapshotsBackup.value]
+      }
+    })
+    return
+  }
+  
+  // Update backup when snapshots change (but aren't being cleared)
+  if (newSnapshots.length > 0) {
+    snapshotsBackup.value = [...newSnapshots]
+  }
+  
   if (sortedSnapshots.value.length > 0 && !isNewSnapshot.value && currentSnapshotIndex.value >= 0) {
     loadSnapshotData(sortedSnapshots.value[currentSnapshotIndex.value])
   }
-}, { deep: true })
+}, { deep: true, immediate: true })
 
 // Watch for route changes to reload recipe
 watch(() => route.params.id, () => {
@@ -1102,11 +1187,54 @@ onMounted(() => {
   padding-bottom: 0.5rem;
 }
 
+.snapshot-header-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
 .snapshot-name {
   font-size: 1.2rem;
   color: var(--color-medium-brown);
   font-weight: normal;
   font-style: italic;
+  margin: 0;
+}
+
+.set-default-header-btn {
+  padding: 0.5rem 1rem;
+  background-color: var(--color-light-brown);
+  color: var(--color-dark-brown);
+  border: 2px solid var(--color-medium-brown);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 500;
+}
+
+.set-default-header-btn:hover {
+  background-color: var(--color-gold);
+  border-color: var(--color-dark-brown);
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.default-badge {
+  padding: 0.5rem 1rem;
+  background-color: var(--color-gold);
+  color: var(--color-dark-brown);
+  border: 2px solid var(--color-medium-brown);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .recipe-name-input {
@@ -1259,14 +1387,14 @@ onMounted(() => {
   position: relative;
   margin-bottom: 0;
   overflow-x: auto;
+  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   padding-bottom: 0;
-  display: flex;
-  justify-content: flex-end; /* Right-align tabs */
   /* Same color as page background and content */
   background-color: #FFF8DC;
   border-radius: 4px 4px 0 0;
+  max-height: 60px; /* Fixed height to prevent vertical expansion */
 }
 
 .snapshot-tabs {
@@ -1276,6 +1404,8 @@ onMounted(() => {
   position: relative;
   padding-left: 0.5rem;
   padding-right: 0.5rem;
+  align-items: flex-end; /* Align tabs to bottom */
+  height: 100%;
   /* Order: New button (leftmost), newest snapshot, older snapshots (rightmost) */
 }
 
@@ -1296,14 +1426,20 @@ onMounted(() => {
   box-shadow: 
     0 -2px 4px rgba(0, 0, 0, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  height: fit-content;
+  min-height: 48px; /* Fixed minimum height */
+  flex-shrink: 0; /* Prevent tabs from shrinking */
 }
 
 .snapshot-tab:hover {
   background-color: var(--color-gold);
-  transform: translateY(-3px);
+  transform: translateY(-2px);
   box-shadow: 
     0 -4px 8px rgba(0, 0, 0, 0.15),
     inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  /* Maintain height on hover */
+  height: fit-content;
+  min-height: 48px;
 }
 
 .snapshot-tab.active {
@@ -1318,28 +1454,24 @@ onMounted(() => {
   margin-bottom: -2px; /* Overlap border to connect seamlessly */
   border-radius: 8px 8px 0 0;
   z-index: 10; /* Ensure active tab is above content border */
+  /* Maintain consistent height */
+  height: fit-content;
+  min-height: 48px;
 }
 
 .snapshot-tab.default {
   border-color: var(--color-gold);
+  border-width: 2px;
+  box-shadow: 
+    0 -2px 4px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 0 8px rgba(236, 177, 118, 0.3);
 }
 
 .default-icon {
-  font-size: 0.9rem;
-}
-
-.set-default-btn {
-  padding: 0.25rem 0.5rem;
-  background-color: transparent;
-  border: 1px solid var(--color-medium-brown);
-  border-radius: 4px;
-  font-size: 0.8rem;
-  opacity: 0.6;
-  transition: opacity 0.2s;
-}
-
-.set-default-btn:hover {
-  opacity: 1;
+  font-size: 1rem;
+  color: var(--color-gold);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
 }
 
 .new-tab {

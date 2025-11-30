@@ -22,9 +22,9 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* Background is now handled in style.css with filter */
 #app {
   min-height: 100vh;
-  background-color: #FED8B1;
 }
 </style>
 

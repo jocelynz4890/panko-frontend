@@ -5,22 +5,24 @@
     <div v-if="loading" class="loading">Loading...</div>
     <div v-if="error" class="error">{{ error }}</div>
     
-    <div class="calendar-controls">
-      <button @click="previousMonth" class="nav-month">← Previous</button>
-      <h2 class="current-month">{{ currentMonthYear }}</h2>
-      <button @click="nextMonth" class="nav-month">Next →</button>
-    </div>
-    
-    <div class="calendar-wrapper">
-      <div class="calendar-grid">
+    <div class="calendar-layout">
+      <div class="calendar-section">
+        <div class="calendar-controls">
+          <button @click="previousMonth" class="nav-month">← Previous</button>
+          <h2 class="current-month">{{ currentMonthYear }}</h2>
+          <button @click="nextMonth" class="nav-month">Next →</button>
+        </div>
+        <div class="calendar-wrapper">
+          <div class="calendar-grid">
         <div
           v-for="day in calendarDays"
           :key="day.date"
           class="calendar-day"
           :class="{ 'other-month': !day.isCurrentMonth, 'today': day.isToday }"
           @drop="handleDrop($event, day.date)"
-          @dragover.prevent
-          @dragenter.prevent
+          @dragover.prevent="handleDragOver($event)"
+          @dragenter.prevent="handleDragEnter($event)"
+          @dragleave.prevent
         >
           <div class="day-number">{{ day.day }}</div>
           <div class="day-content">
@@ -28,65 +30,80 @@
               v-for="scheduled in getScheduledForDay(day.date)"
               :key="scheduled.scheduledRecipe._id"
               class="scheduled-item"
+              :class="{ 'dragging': isDragging && draggedItem && draggedItem.scheduledRecipe._id === scheduled.scheduledRecipe._id }"
               :draggable="true"
               @dragstart="handleDragStart($event, scheduled)"
-              @click="removeScheduled(scheduled.scheduledRecipe._id)"
+              @dragend="handleDragEnd($event)"
+              @click.stop="handleScheduledClick($event, scheduled.scheduledRecipe._id)"
               :title="`${scheduled.recipeName} - ${scheduled.snapshotName || 'Default'}`"
             >
-              {{ scheduled.recipeName }}
-              <span class="remove-hint">(click to remove)</span>
+              <div class="scheduled-recipe-name">{{ scheduled.recipeName }}</div>
+              <div class="scheduled-snapshot-name">{{ scheduled.snapshotName || 'Default' }}</div>
+              <div class="remove-hint">click to remove</div>
             </div>
             <div
               v-if="getScheduledForDay(day.date).length === 0"
               class="empty-day"
             >
-              Drop recipes here
+              Drop snapshots here
+            </div>
+          </div>
+          </div>
+        </div>
+      </div>
+      </div>
+    
+      <!-- Snapshot Selection Panel -->
+      <div class="snapshot-panel">
+        <h3>Add Snapshot to Calendar</h3>
+        <div v-if="availableSnapshots.length === 0" class="no-snapshots">
+          No snapshots available. Create snapshots in your recipes first.
+        </div>
+        <div v-else class="snapshot-list">
+          <div
+            v-for="snapshot in availableSnapshots"
+            :key="snapshot._id"
+            class="snapshot-option"
+            draggable="true"
+            @dragstart="handleDragStartSnapshot($event, snapshot)"
+            @dragend="handleDragEnd"
+            :title="`Drag to calendar to schedule: ${snapshot.recipeName} - ${snapshot.name || 'Default'}`"
+          >
+            <div class="snapshot-option-recipe">{{ snapshot.recipeName }}</div>
+            <div class="snapshot-option-name">{{ snapshot.name || formatDateShort(snapshot.date) || 'Default' }}</div>
+            <div class="snapshot-option-date" v-if="snapshot.date">
+              {{ formatDateShort(snapshot.date) }}
             </div>
           </div>
         </div>
       </div>
     </div>
-    
-    <!-- Recipe Selection Panel -->
-    <div class="recipe-panel">
-      <h3>Add Recipe to Calendar</h3>
-      <div v-if="availableRecipes.length === 0" class="no-recipes">
-        No recipes available. Create recipes in your recipe books first.
-      </div>
-      <div v-else class="recipe-list">
-        <div
-          v-for="recipe in availableRecipes"
-          :key="recipe._id"
-          class="recipe-option"
-          :draggable="true"
-          @dragstart="handleDragStartRecipe($event, recipe)"
-        >
-          <div class="recipe-option-name">{{ recipe.name }}</div>
-          <div class="recipe-option-snapshot" v-if="recipe.defaultSnapshotName">
-            {{ recipe.defaultSnapshotName }}
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Batch Update Controls -->
-    <div v-if="hasPendingUpdates" class="batch-controls">
-      <div class="pending-count">{{ pendingUpdatesCount }} pending changes</div>
-      <button @click="submitUpdates" class="submit-updates-btn" :disabled="submitting">
-        {{ submitting ? 'Saving...' : 'Save Changes' }}
-      </button>
-      <button @click="clearPendingUpdates" class="clear-updates-btn">Clear</button>
-    </div>
   </div>
+  
+  <!-- Batch Update Controls - Overlay at bottom right -->
+  <!-- Using Teleport to body ensures it's outside any filtered containers -->
+  <Teleport to="body">
+    <div v-if="hasPendingUpdates" ref="batchControlsRef" class="batch-controls-overlay">
+      <div class="batch-controls-content">
+        <div class="pending-count">{{ pendingUpdatesCount }} pending changes</div>
+        <button @click="submitUpdates" class="submit-updates-btn" :disabled="submitting">
+          {{ submitting ? 'Saving...' : 'Save Changes' }}
+        </button>
+        <button @click="clearPendingUpdates" class="clear-updates-btn">Clear</button>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, onActivated } from 'vue'
+import { useRoute } from 'vue-router'
 import { useCalendarStore } from '../stores/calendar'
 import { useRecipeBooksStore } from '../stores/recipeBooks'
 import { useRecipesStore } from '../stores/recipes'
 import { useAuthStore } from '../stores/auth'
 
+const route = useRoute()
 const calendarStore = useCalendarStore()
 const recipeBooksStore = useRecipeBooksStore()
 const recipesStore = useRecipesStore()
@@ -98,8 +115,9 @@ const draggedRecipe = ref(null)
 const loading = ref(false)
 const error = ref('')
 const submitting = ref(false)
-const availableRecipes = ref([])
+const availableSnapshots = ref([])
 const scheduledRecipesData = ref([])
+const isDragging = ref(false) // Track if we're currently dragging to prevent click events
 
 const currentMonthYear = computed(() => {
   return currentDate.value.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
@@ -155,7 +173,12 @@ function nextMonth() {
 }
 
 function getScheduledForDay(date) {
-  return scheduledRecipesData.value.filter(item => item.date === date)
+  // Normalize dates to ensure proper comparison
+  const normalizedDate = typeof date === 'string' ? date : date.toISOString().split('T')[0]
+  return scheduledRecipesData.value.filter(item => {
+    const itemDate = typeof item.date === 'string' ? item.date : new Date(item.date).toISOString().split('T')[0]
+    return itemDate === normalizedDate
+  })
 }
 
 async function loadData() {
@@ -169,29 +192,32 @@ async function loadData() {
     // Load all recipe books and their recipes
     await recipeBooksStore.fetchBooks()
     
-    // Load recipes and snapshots
-    const allRecipes = []
+    // Load all snapshots from all recipes
+    const allSnapshots = []
     for (const book of recipeBooksStore.books) {
       if (book.recipes && book.recipes.length > 0) {
         for (const recipeId of book.recipes) {
           try {
+            // Always fetch fresh recipe data
+            if (recipesStore.currentRecipe?._id === recipeId) {
+              recipesStore.currentRecipe = null
+            }
             await recipesStore.fetchRecipe(recipeId)
             const recipe = recipesStore.currentRecipe
-            if (recipe) {
-              let defaultSnapshotName = null
-              if (recipe.defaultSnapshot) {
-                await recipesStore.fetchSnapshots(recipeId)
-                const snapshot = recipesStore.snapshots.find(s => s._id === recipe.defaultSnapshot)
-                if (snapshot) {
-                  defaultSnapshotName = snapshot.subname || 'Default'
-                }
+            if (recipe && recipe.snapshots && recipe.snapshots.length > 0) {
+              // Fetch all snapshots for this recipe
+              await recipesStore.fetchSnapshots(recipeId)
+              
+              // Add each snapshot to the list
+              for (const snapshot of recipesStore.snapshots) {
+                allSnapshots.push({
+                  _id: snapshot._id,
+                  recipeId: recipe._id,
+                  recipeName: recipe.name,
+                  name: snapshot.subname || null,
+                  date: snapshot.date || null
+                })
               }
-              allRecipes.push({
-                _id: recipe._id,
-                name: recipe.name,
-                defaultSnapshot: recipe.defaultSnapshot,
-                defaultSnapshotName
-              })
             }
           } catch (err) {
             console.error(`Failed to load recipe ${recipeId}:`, err)
@@ -199,59 +225,85 @@ async function loadData() {
         }
       }
     }
-    availableRecipes.value = allRecipes
+    // Sort snapshots by recipe name, then by date (newest first)
+    allSnapshots.sort((a, b) => {
+      if (a.recipeName !== b.recipeName) {
+        return a.recipeName.localeCompare(b.recipeName)
+      }
+      const dateA = a.date ? new Date(a.date) : new Date(0)
+      const dateB = b.date ? new Date(b.date) : new Date(0)
+      return dateB - dateA
+    })
+    availableSnapshots.value = allSnapshots
     
     // Build scheduled recipes data with recipe names
     scheduledRecipesData.value = []
     
-    // First, try to match by default snapshots
+    // Match scheduled snapshots to our loaded snapshots
     for (const scheduled of calendarStore.scheduledRecipes) {
-      const recipe = allRecipes.find(r => r.defaultSnapshot === scheduled.snapshot)
-      if (recipe) {
+      // Normalize date to YYYY-MM-DD format
+      let normalizedDate = scheduled.date
+      if (scheduled.date instanceof Date) {
+        normalizedDate = scheduled.date.toISOString().split('T')[0]
+      } else if (typeof scheduled.date === 'string' && scheduled.date.includes('T')) {
+        normalizedDate = scheduled.date.split('T')[0]
+      }
+      
+      // Find the snapshot in our loaded snapshots
+      const snapshot = allSnapshots.find(s => s._id === scheduled.snapshot)
+      
+      if (snapshot) {
         scheduledRecipesData.value.push({
           scheduledRecipe: scheduled,
-          recipeName: recipe.name,
-          snapshotName: recipe.defaultSnapshotName,
-          date: scheduled.date,
+          recipeName: snapshot.recipeName,
+          snapshotName: snapshot.name || 'Default',
+          date: normalizedDate,
           snapshot: scheduled.snapshot
         })
       } else {
-        // Mark for later lookup
+        // If snapshot not found, mark for lookup
         scheduledRecipesData.value.push({
           scheduledRecipe: scheduled,
           recipeName: 'Loading...',
           snapshotName: null,
-          date: scheduled.date,
+          date: normalizedDate,
           snapshot: scheduled.snapshot,
           needsLookup: true
         })
       }
     }
     
-    // Lookup recipes for snapshots not found by default
+    // Lookup snapshots that weren't found in the initial load
     for (const item of scheduledRecipesData.value) {
       if (item.needsLookup) {
+        // Search through recipe books to find this snapshot
         let found = false
-        for (const r of allRecipes) {
-          try {
-            await recipesStore.fetchRecipe(r._id)
-            const recipeData = recipesStore.currentRecipe
-            if (recipeData && recipeData.snapshots && recipeData.snapshots.includes(item.snapshot)) {
-              await recipesStore.fetchSnapshots(r._id)
-              const snapshot = recipesStore.snapshots.find(s => s._id === item.snapshot)
-              if (snapshot) {
-                item.recipeName = r.name
-                item.snapshotName = snapshot.subname || 'Untitled'
-                found = true
-                break
+        for (const book of recipeBooksStore.books) {
+          if (book.recipes && book.recipes.length > 0) {
+            for (const recipeId of book.recipes) {
+              try {
+                await recipesStore.fetchSnapshots(recipeId)
+                const snapshot = recipesStore.snapshots.find(s => s._id === item.snapshot)
+                if (snapshot) {
+                  await recipesStore.fetchRecipe(recipeId)
+                  const recipe = recipesStore.currentRecipe
+                  if (recipe) {
+                    item.recipeName = recipe.name
+                    item.snapshotName = snapshot.subname || 'Untitled'
+                    found = true
+                    break
+                  }
+                }
+              } catch (err) {
+                // Continue searching
               }
             }
-          } catch (err) {
-            // Continue searching
+            if (found) break
           }
         }
         if (!found) {
           item.recipeName = 'Unknown Recipe'
+          item.snapshotName = 'Unknown Snapshot'
         }
         delete item.needsLookup
       }
@@ -264,54 +316,246 @@ async function loadData() {
 }
 
 function handleDragStart(event, scheduled) {
+  console.log('Drag started for scheduled item:', scheduled)
+  isDragging.value = true
   draggedItem.value = scheduled
   event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.dropEffect = 'move'
+  // Store scheduled data in dataTransfer for reliable access
+  const dragData = {
+    type: 'scheduled',
+    scheduledId: scheduled.scheduledRecipe._id,
+    snapshot: scheduled.snapshot,
+    currentDate: scheduled.date
+  }
+  event.dataTransfer.setData('application/json', JSON.stringify(dragData))
+  event.dataTransfer.setData('text/plain', 'scheduled')
+  console.log('Drag data set:', dragData)
 }
 
-function handleDragStartRecipe(event, recipe) {
-  draggedRecipe.value = recipe
-  event.dataTransfer.effectAllowed = 'copy'
+function handleDragStartSnapshot(event, snapshot) {
+  console.log('Drag started for snapshot:', snapshot)
+  try {
+    draggedRecipe.value = snapshot
+    event.dataTransfer.effectAllowed = 'copy'
+    // Store snapshot data in dataTransfer for reliable access during drop
+    const dragData = {
+      type: 'snapshot',
+      snapshotId: snapshot._id,
+      recipeId: snapshot.recipeId,
+      recipeName: snapshot.recipeName,
+      snapshotName: snapshot.name || 'Default',
+      date: snapshot.date
+    }
+    event.dataTransfer.setData('application/json', JSON.stringify(dragData))
+    event.dataTransfer.setData('text/plain', 'snapshot') // Fallback for some browsers
+    console.log('Drag data stored:', dragData)
+  } catch (error) {
+    console.error('Error in handleDragStartSnapshot:', error)
+    event.preventDefault()
+  }
+}
+
+function formatDateShort(dateString) {
+  if (!dateString) return null
+  try {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  } catch {
+    return dateString
+  }
 }
 
 async function handleDrop(event, date) {
   event.preventDefault()
+  event.stopPropagation()
+  console.log('Drop event fired on date:', date)
+  console.log('draggedRecipe.value:', draggedRecipe.value)
+  console.log('draggedItem.value:', draggedItem.value)
   
-  if (draggedItem.value) {
-    // Moving existing scheduled item
-    if (draggedItem.value.date !== date) {
-      calendarStore.addPendingUpdate({
-        type: 'move',
-        oldScheduledRecipe: draggedItem.value.scheduledRecipe._id,
-        snapshot: draggedItem.value.snapshot,
-        newDate: date
-      })
-      
-      // Update local state immediately
-      draggedItem.value.date = date
-      scheduledRecipesData.value = [...scheduledRecipesData.value]
+  // Try to get data from dataTransfer first
+  let dragData = null
+  try {
+    const dataString = event.dataTransfer.getData('application/json')
+    console.log('dataTransfer.getData result:', dataString)
+    if (dataString) {
+      dragData = JSON.parse(dataString)
+      console.log('Parsed drag data:', dragData)
     }
-  } else if (draggedRecipe.value) {
-    // Adding new recipe
-    if (draggedRecipe.value.defaultSnapshot) {
+  } catch (e) {
+    console.warn('Could not parse drag data from dataTransfer:', e)
+  }
+  
+  // Fallback to component refs if dataTransfer failed (this is more reliable)
+  if (!dragData) {
+    console.log('No dataTransfer data, checking refs...')
+    if (draggedItem.value) {
+      console.log('Using draggedItem ref')
+      dragData = {
+        type: 'scheduled',
+        scheduledId: draggedItem.value.scheduledRecipe._id,
+        snapshot: draggedItem.value.snapshot,
+        currentDate: draggedItem.value.date
+      }
+    } else if (draggedRecipe.value) {
+      console.log('Using draggedRecipe ref (snapshot)')
+      dragData = {
+        type: 'snapshot',
+        snapshotId: draggedRecipe.value._id,
+        recipeId: draggedRecipe.value.recipeId,
+        recipeName: draggedRecipe.value.recipeName,
+        snapshotName: draggedRecipe.value.name || 'Default',
+        date: draggedRecipe.value.date
+      }
+    }
+  }
+  
+  console.log('Final dragData:', dragData)
+  
+  if (!dragData) {
+    console.warn('No drag data available in drop handler')
+    isDragging.value = false
+    return
+  }
+  
+  // Mark that drop is being processed
+  isDragging.value = false
+  
+  if (dragData.type === 'scheduled') {
+    // Moving existing scheduled item
+    const scheduledItem = scheduledRecipesData.value.find(
+      item => item.scheduledRecipe._id === dragData.scheduledId
+    )
+    if (scheduledItem) {
+      // Normalize dates for comparison
+      const oldDateNormalized = typeof scheduledItem.date === 'string' ? scheduledItem.date : new Date(scheduledItem.date).toISOString().split('T')[0]
+      const newDateNormalized = typeof date === 'string' ? date : new Date(date).toISOString().split('T')[0]
+      
+      // Only move if date is actually different
+      if (oldDateNormalized !== newDateNormalized) {
+        // Add pending update for the move
+        calendarStore.addPendingUpdate({
+          type: 'move',
+          oldScheduledRecipe: dragData.scheduledId,
+          snapshot: dragData.snapshot,
+          newDate: newDateNormalized,
+          date: oldDateNormalized // Keep track of old date
+        })
+        
+        // Remove from old location and add to new location
+        const itemIndex = scheduledRecipesData.value.findIndex(
+          item => item.scheduledRecipe._id === dragData.scheduledId
+        )
+        if (itemIndex !== -1) {
+          const movedItem = scheduledRecipesData.value[itemIndex]
+          movedItem.date = newDateNormalized
+          scheduledRecipesData.value.splice(itemIndex, 1)
+          scheduledRecipesData.value.push(movedItem)
+          // Force reactivity update
+          scheduledRecipesData.value = [...scheduledRecipesData.value]
+          console.log('Moved scheduled item from', oldDateNormalized, 'to', newDateNormalized)
+        }
+      }
+    }
+  } else if (dragData.type === 'snapshot' || dragData.type === 'recipe') {
+    // Adding new snapshot (or legacy recipe with default snapshot)
+    const snapshotId = dragData.type === 'snapshot' ? dragData.snapshotId : dragData.defaultSnapshot
+    const recipeName = dragData.recipeName
+    const snapshotName = dragData.type === 'snapshot' ? dragData.snapshotName : dragData.defaultSnapshotName
+    
+    if (snapshotId) {
+      console.log('Dropping snapshot:', dragData, 'on date:', date)
       calendarStore.addPendingUpdate({
         type: 'add',
-        snapshot: draggedRecipe.value.defaultSnapshot,
+        snapshot: snapshotId,
         date: date
       })
       
       // Add to local state immediately
-      scheduledRecipesData.value.push({
-        scheduledRecipe: { _id: 'pending-' + Date.now(), snapshot: draggedRecipe.value.defaultSnapshot, date },
-        recipeName: draggedRecipe.value.name,
-        snapshotName: draggedRecipe.value.defaultSnapshotName,
+      const newScheduledItem = {
+        scheduledRecipe: { 
+          _id: 'pending-' + Date.now(), 
+          snapshot: snapshotId, 
+          date: date
+        },
+        recipeName: recipeName,
+        snapshotName: snapshotName || null,
         date: date,
-        snapshot: draggedRecipe.value.defaultSnapshot
-      })
+        snapshot: snapshotId
+      }
+      scheduledRecipesData.value.push(newScheduledItem)
+      
+      // Force reactivity update
+      scheduledRecipesData.value = [...scheduledRecipesData.value]
+      
+      console.log('Added snapshot to calendar day:', date)
+      console.log('All scheduled items:', scheduledRecipesData.value)
+    } else {
+      console.warn('No snapshot ID available:', dragData)
+      error.value = `Unable to schedule. Please try again.`
+      setTimeout(() => { error.value = '' }, 5000)
     }
+  } else {
+    console.warn('Unknown drag data type:', dragData.type)
   }
   
-  draggedItem.value = null
-  draggedRecipe.value = null
+  // Clean up drag refs after drop is processed
+  setTimeout(() => {
+    draggedItem.value = null
+    draggedRecipe.value = null
+  }, 100)
+}
+
+function handleDragEnd(event) {
+  // Don't clear refs or reset dragging immediately - let drop handler process first
+  // The drop handler will set isDragging to false when it's done
+  // If no drop happens, the refs will be cleared after a delay
+  setTimeout(() => {
+    if (isDragging.value) {
+      // Still dragging means drop didn't happen, clean up
+      isDragging.value = false
+      draggedItem.value = null
+      draggedRecipe.value = null
+    }
+  }, 300)
+}
+
+function handleScheduledClick(event, scheduledRecipeId) {
+  // Prevent click if we just finished dragging
+  if (isDragging.value) {
+    return
+  }
+  // Use a small delay to ensure drag didn't just happen
+  setTimeout(() => {
+    if (!isDragging.value) {
+      removeScheduled(scheduledRecipeId)
+    }
+  }, 50)
+}
+
+function handleDragOver(event) {
+  event.preventDefault()
+  // Check if we're dragging a scheduled item (move) or snapshot (copy)
+  // Can't read dataTransfer.getData during dragover, so check refs instead
+  if (draggedItem.value) {
+    event.dataTransfer.dropEffect = 'move'
+  } else if (draggedRecipe.value) {
+    event.dataTransfer.dropEffect = 'copy'
+  } else {
+    event.dataTransfer.dropEffect = 'copy'
+  }
+}
+
+function handleDragEnter(event) {
+  event.preventDefault()
+  // Check refs to determine drop effect
+  if (draggedItem.value) {
+    event.dataTransfer.dropEffect = 'move'
+  } else if (draggedRecipe.value) {
+    event.dataTransfer.dropEffect = 'copy'
+  } else {
+    event.dataTransfer.dropEffect = 'copy'
+  }
 }
 
 async function removeScheduled(scheduledRecipeId) {
@@ -363,6 +607,20 @@ function clearPendingUpdates() {
 onMounted(() => {
   loadData()
 })
+
+// Reload data when navigating to this route (in case recipes were updated)
+watch(() => route.path, (newPath, oldPath) => {
+  if (newPath === '/calendar' && oldPath && oldPath !== newPath) {
+    console.log('Calendar route activated - reloading data to get latest recipe defaults')
+    loadData()
+  }
+})
+
+// Also reload when component is activated (works with Vue Router keep-alive)
+onActivated(() => {
+  console.log('Calendar component activated - reloading data to get latest recipe defaults')
+  loadData()
+})
 </script>
 
 <style scoped>
@@ -393,7 +651,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
 }
 
 .nav-month {
@@ -414,12 +672,26 @@ onMounted(() => {
   font-size: 1.5rem;
 }
 
+.calendar-layout {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.calendar-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* Allow shrinking */
+}
+
 .calendar-wrapper {
   background-color: white;
   border-radius: 8px;
   padding: 1rem;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  margin-bottom: 2rem;
+  flex: 1;
+  min-width: 0; /* Allow shrinking */
 }
 
 .calendar-grid {
@@ -483,12 +755,30 @@ onMounted(() => {
   cursor: grabbing;
 }
 
+.scheduled-item.dragging {
+  background-color: #800020 !important; /* Maroon red */
+  opacity: 0.8;
+  transform: scale(0.95);
+}
+
+.scheduled-recipe-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.scheduled-snapshot-name {
+  font-size: 0.8rem;
+  opacity: 0.9;
+  margin-top: 0.15rem;
+}
+
 .remove-hint {
   font-size: 0.7rem;
-  opacity: 0.8;
-  display: block;
+  opacity: 0.7;
+  font-style: italic;
   margin-top: 0.25rem;
 }
+
 
 .empty-day {
   font-size: 0.75rem;
@@ -498,68 +788,108 @@ onMounted(() => {
   padding: 0.5rem;
 }
 
-.recipe-panel {
+.snapshot-panel {
   background-color: white;
   border-radius: 8px;
   padding: 1.5rem;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  margin-bottom: 2rem;
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 250px); /* Limit height based on viewport */
 }
 
-.recipe-panel h3 {
+.snapshot-panel h3 {
   color: var(--color-dark-brown);
   margin-bottom: 1rem;
+  flex-shrink: 0;
 }
 
-.recipe-list {
+.no-snapshots {
+  color: var(--color-medium-brown);
+  text-align: center;
+  padding: 1rem;
+}
+
+.snapshot-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.75rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  min-height: 0; /* Allow scrolling */
+  padding-right: 0.5rem; /* Space for scrollbar */
 }
 
-.recipe-option {
+/* Custom scrollbar styling */
+.snapshot-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.snapshot-list::-webkit-scrollbar-track {
+  background: var(--color-cream);
+  border-radius: 4px;
+}
+
+.snapshot-list::-webkit-scrollbar-thumb {
+  background: var(--color-medium-brown);
+  border-radius: 4px;
+}
+
+.snapshot-list::-webkit-scrollbar-thumb:hover {
+  background: var(--color-dark-brown);
+}
+
+.snapshot-option {
   background-color: var(--color-cream);
   border: 2px solid var(--color-light-brown);
   border-radius: 4px;
   padding: 0.75rem 1rem;
   cursor: grab;
   transition: all 0.2s;
-  min-width: 150px;
+  flex-shrink: 0;
 }
 
-.recipe-option:hover {
+.snapshot-option:hover {
   background-color: var(--color-gold);
   border-color: var(--color-medium-brown);
-  transform: translateY(-2px);
+  transform: translateX(-2px);
 }
 
-.recipe-option:active {
+.snapshot-option:active {
   cursor: grabbing;
 }
 
-.recipe-option-name {
+.snapshot-option-recipe {
   font-weight: 600;
   color: var(--color-dark-brown);
   margin-bottom: 0.25rem;
+  font-size: 0.9rem;
 }
 
-.recipe-option-snapshot {
+.snapshot-option-name {
+  color: var(--color-dark-brown);
+  margin-bottom: 0.15rem;
   font-size: 0.85rem;
+}
+
+.snapshot-option-date {
+  font-size: 0.75rem;
   color: var(--color-medium-brown);
   font-style: italic;
 }
 
-.no-recipes {
-  color: var(--color-medium-brown);
-  font-style: italic;
-  padding: 1rem;
-  text-align: center;
-}
 
-.batch-controls {
-  position: fixed;
-  bottom: 2rem;
-  right: 2rem;
+/* Use :deep() to ensure styles apply when teleported, or make it global */
+.batch-controls,
+:deep(.batch-controls) {
+  position: fixed !important;
+  bottom: 2rem !important;
+  right: 2rem !important;
+  left: auto !important;
+  top: auto !important;
   background-color: white;
   padding: 1.5rem;
   border-radius: 8px;
@@ -567,7 +897,9 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 1rem;
-  z-index: 100;
+  z-index: 99999 !important; /* Extremely high z-index to ensure it stays on top and fixed */
+  pointer-events: auto; /* Ensure it's clickable */
+  transform: none !important; /* Ensure no transform affects positioning */
 }
 
 .pending-count {
@@ -628,15 +960,52 @@ onMounted(() => {
   .batch-controls {
     bottom: 1rem;
     right: 1rem;
-    left: 1rem;
+    left: auto; /* Keep it in bottom right even on mobile */
     flex-direction: column;
     padding: 1rem;
+    max-width: calc(100vw - 2rem); /* Don't overflow screen */
   }
   
   .calendar-controls {
     flex-direction: column;
     gap: 1rem;
   }
+}
+</style>
+
+<style>
+/* Global styles for batch-controls overlay at bottom right */
+/* Filter moved from body to #app, so body no longer creates containing block */
+.batch-controls-overlay {
+  position: fixed !important;
+  bottom: 2rem !important;
+  right: 2rem !important;
+  left: auto !important;
+  top: auto !important;
+  width: auto !important;
+  height: auto !important;
+  z-index: 2147483647 !important; /* Maximum z-index */
+  pointer-events: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: block !important;
+  transform: none !important;
+  filter: none !important;
+  perspective: none !important;
+}
+
+.batch-controls-content {
+  background-color: white !important;
+  padding: 1rem 1.5rem !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 1rem !important;
+  pointer-events: auto !important;
+  margin: 0 !important;
+  white-space: nowrap !important;
+  position: relative !important;
 }
 </style>
 
