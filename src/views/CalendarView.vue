@@ -102,6 +102,7 @@ import { useCalendarStore } from '../stores/calendar'
 import { useRecipeBooksStore } from '../stores/recipeBooks'
 import { useRecipesStore } from '../stores/recipes'
 import { useAuthStore } from '../stores/auth'
+import { dishesAPI, recipeAPI } from '../api/api'
 
 const route = useRoute()
 const calendarStore = useCalendarStore()
@@ -195,39 +196,56 @@ async function loadData() {
     // Load all recipe books and their dishes
     await recipeBooksStore.fetchBooks()
     
-    // Load all recipes from all dishes
-    const allRecipes = []
+    // Collect all dish IDs from all books
+    const allDishIds = []
     for (const book of recipeBooksStore.books) {
       if (book.dishes && book.dishes.length > 0) {
-        for (const dishId of book.dishes) {
-          try {
-            // Always fetch fresh dish data
-            if (recipesStore.currentDish?._id === dishId) {
-              recipesStore.currentDish = null
-            }
-            await recipesStore.fetchDish(dishId)
-            const dish = recipesStore.currentDish
-            if (dish && dish.recipes && dish.recipes.length > 0) {
-              // Fetch all recipes for this dish
-              await recipesStore.fetchRecipes(dishId)
-              
-              // Add each recipe to the list
-              for (const recipe of recipesStore.recipes) {
-                allRecipes.push({
-                  _id: recipe._id,
-                  dishId: dish._id,
-                  dishName: dish.name,
-                  name: recipe.subname || null,
-                  date: recipe.date || null
-                })
-              }
-            }
-          } catch (err) {
-            console.error(`Failed to load dish ${dishId}:`, err)
-          }
-        }
+        allDishIds.push(...book.dishes)
       }
     }
+    
+    // Remove duplicates
+    const uniqueDishIds = [...new Set(allDishIds)]
+    
+    // Load all dishes in parallel (without recipes)
+    const dishPromises = uniqueDishIds.map(async (dishId) => {
+      try {
+        const response = await dishesAPI.getDish(dishId)
+        const dishes = response.data.dishes || response.data
+        return Array.isArray(dishes) ? dishes[0] : dishes
+      } catch (err) {
+        console.error(`Failed to load dish ${dishId}:`, err)
+        return null
+      }
+    })
+    
+    const loadedDishes = (await Promise.all(dishPromises)).filter(d => d !== null)
+    
+    // Load all recipes in parallel for dishes that have recipes
+    const recipePromises = loadedDishes.map(async (dish) => {
+      if (dish.recipes && dish.recipes.length > 0) {
+        try {
+          const response = await recipeAPI.getRecipes(dish._id)
+          const recipesData = response.data.recipes || response.data
+          const recipes = Array.isArray(recipesData) ? recipesData : []
+          return recipes.map(recipe => ({
+            _id: recipe._id,
+            dishId: dish._id,
+            dishName: dish.name,
+            name: recipe.subname || null,
+            date: recipe.date || null
+          }))
+        } catch (err) {
+          console.error(`Failed to load recipes for dish ${dish._id}:`, err)
+          return []
+        }
+      }
+      return []
+    })
+    
+    // Wait for all recipes to load and flatten results
+    const results = await Promise.all(recipePromises)
+    const allRecipes = results.flat()
     // Sort recipes by date (newest first)
     allRecipes.sort((a, b) => {
       const dateA = a.date ? new Date(a.date) : new Date(0)

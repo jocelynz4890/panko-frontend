@@ -259,6 +259,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useRecipeBooksStore } from '../stores/recipeBooks'
 import { useRecipesStore } from '../stores/recipes'
 import { useAuthStore } from '../stores/auth'
+import { dishesAPI, recipeAPI } from '../api/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -383,44 +384,52 @@ async function loadBookData() {
     console.log('Dish IDs to load:', dishIds)
     
     if (dishIds.length > 0) {
-      // Load dishes and their recipes
-      for (const dishId of dishIds) {
+      // First, fetch all dishes in parallel (without recipes)
+      const dishPromises = dishIds.map(async (dishId) => {
         try {
-          console.log(`Loading dish ${dishId}...`)
-          // Fetch fresh dish data
-          await recipesStore.fetchDish(dishId)
-          const dish = recipesStore.currentDish
-          console.log(`Loaded dish ${dishId}:`, dish)
-          
-          if (dish) {
-            // Create a deep copy to avoid reactivity issues
-            dishes.value.push({
-              _id: dish._id,
-              name: dish.name,
-              description: dish.description,
-              recipes: dish.recipes ? [...dish.recipes] : [],
-              defaultRecipe: dish.defaultRecipe
-            })
-            console.log(`Added dish to list. Total dishes: ${dishes.value.length}`)
-            
-            // Load recipes for this dish and store them per dish
-            if (dish.recipes?.length > 0) {
-              console.log(`Loading recipes for dish ${dishId}...`)
-              await recipesStore.fetchRecipes(dishId)
-              console.log(`Loaded ${recipesStore.recipes.length} recipes for dish ${dishId}`)
-              // Store recipes for this specific dish
-              recipesByDish.value[dishId] = [...recipesStore.recipes]
-            } else {
-              // Initialize empty array for dishes with no recipes
-              recipesByDish.value[dishId] = []
-              console.log(`Dish ${dishId} has no recipes`)
-            }
-          } else {
-            console.warn(`Dish ${dishId} not found`)
-          }
+          const response = await dishesAPI.getDish(dishId)
+          const dishes = response.data.dishes || response.data
+          return Array.isArray(dishes) ? dishes[0] : dishes
         } catch (err) {
           console.error(`Failed to load dish ${dishId}:`, err)
+          return null
         }
+      })
+      
+      const loadedDishes = (await Promise.all(dishPromises)).filter(d => d !== null)
+      
+      // Then, fetch all recipes in parallel for dishes that have recipes
+      const recipePromises = loadedDishes.map(async (dish) => {
+        if (dish.recipes && dish.recipes.length > 0) {
+          try {
+            const response = await recipeAPI.getRecipes(dish._id)
+            const recipesData = response.data.recipes || response.data
+            const recipes = Array.isArray(recipesData) ? recipesData : []
+            return { dishId: dish._id, recipes: recipes.sort((a, b) => new Date(a.date) - new Date(b.date)) }
+          } catch (err) {
+            console.error(`Failed to load recipes for dish ${dish._id}:`, err)
+            return { dishId: dish._id, recipes: [] }
+          }
+        }
+        return { dishId: dish._id, recipes: [] }
+      })
+      
+      const recipeResults = await Promise.all(recipePromises)
+      
+      // Process results
+      for (const dish of loadedDishes) {
+        dishes.value.push({
+          _id: dish._id,
+          name: dish.name,
+          description: dish.description,
+          recipes: dish.recipes ? [...dish.recipes] : [],
+          defaultRecipe: dish.defaultRecipe
+        })
+      }
+      
+      // Store recipes by dish
+      for (const result of recipeResults) {
+        recipesByDish.value[result.dishId] = result.recipes
       }
     } else {
       console.warn('No dishes found in book:', book.value)
