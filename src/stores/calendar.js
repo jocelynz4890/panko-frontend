@@ -12,16 +12,17 @@ export const useCalendarStore = defineStore('calendar', () => {
   const authStore = useAuthStore()
 
   async function fetchScheduledRecipes() {
-    if (!authStore.user) return
+    if (!authStore.token) return
     
     loading.value = true
     error.value = null
     try {
-      const response = await calendarAPI.getScheduledRecipes(authStore.user)
+      const response = await calendarAPI.getScheduledRecipes(null)
       // API returns array of objects with scheduledRecipe property
-      scheduledRecipes.value = response.data.map(item => ({
+      const data = response.data.scheduledRecipes || response.data
+      scheduledRecipes.value = data.map(item => ({
         _id: item.scheduledRecipe.scheduledRecipe,
-        snapshot: item.scheduledRecipe.snapshot,
+        recipe: item.scheduledRecipe.recipe,
         date: item.scheduledRecipe.date
       }))
     } catch (err) {
@@ -31,13 +32,13 @@ export const useCalendarStore = defineStore('calendar', () => {
     }
   }
 
-  async function scheduleRecipe(snapshotId, date) {
-    if (!authStore.user) return null
+  async function scheduleRecipe(recipeId, date) {
+    if (!authStore.token) return null
     
     loading.value = true
     error.value = null
     try {
-      const response = await calendarAPI.assignSnapshotToDate(authStore.user, snapshotId, date)
+      const response = await calendarAPI.assignRecipeToDate(null, recipeId, date)
       await fetchScheduledRecipes()
       return response.data.scheduledRecipe
     } catch (err) {
@@ -79,13 +80,13 @@ export const useCalendarStore = defineStore('calendar', () => {
       // Process all pending updates
       for (const update of pendingUpdates.value) {
         if (update.type === 'add') {
-          await scheduleRecipe(update.snapshot, update.date)
+          await scheduleRecipe(update.recipe, update.date)
         } else if (update.type === 'delete') {
           await deleteScheduledRecipe(update.scheduledRecipe)
         } else if (update.type === 'move') {
           // Delete old and create new
           await deleteScheduledRecipe(update.oldScheduledRecipe)
-          await scheduleRecipe(update.snapshot, update.newDate)
+          await scheduleRecipe(update.recipe, update.newDate)
         }
       }
       clearPendingUpdates()

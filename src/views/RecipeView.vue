@@ -3,8 +3,8 @@
     <div v-if="loading && !recipe" class="loading">Loading...</div>
     <div v-if="error && !recipe" class="error">{{ error }}</div>
     
-    <!-- Show recipe page even if there was an error (e.g., timeout) -->
-    <div v-if="recipe || recipeIdFromRoute" class="recipe-page-wrapper">
+    <!-- Show dish page even if there was an error (e.g., timeout) -->
+    <div v-if="dish || dishIdFromRoute" class="recipe-page-wrapper">
       <!-- Book header with name and edit button - Outside the book -->
       <div class="book-header">
         <h1 class="book-name">{{ currentBookName }}</h1>
@@ -26,40 +26,40 @@
               v-if="!editMode"
               class="recipe-name"
             >
-              {{ recipe?.name || editableRecipeName || 'New Recipe' }}
+              {{ dish?.name || editableDishName || 'New Dish' }}
             </h1>
             <input
               v-else
-              v-model="editableRecipeName"
+              v-model="editableDishName"
               class="recipe-name-input"
-              @blur="handleRecipeNameBlur"
+              @blur="handleDishNameBlur"
             />
-            <div class="snapshot-header-row">
+            <div class="recipe-header-row">
               <h2 
                 v-if="!editMode"
-                class="snapshot-name"
+                class="recipe-name"
               >
-                {{ currentSnapshot?.subname || (isNewSnapshot ? editableSnapshot.subname || 'New Snapshot' : 'No snapshots yet') }}
+                {{ currentRecipe?.subname || (isNewRecipe ? editableRecipe.subname || 'New Recipe' : 'No recipes yet') }}
               </h2>
               <input
                 v-else
-                v-model="editableSnapshot.subname"
-                class="snapshot-name-input"
-                placeholder="Snapshot name"
+                v-model="editableRecipe.subname"
+                class="recipe-name-input"
+                placeholder="Recipe name"
               />
               <button
-                v-if="!isNewSnapshot && currentSnapshot && recipe && currentSnapshot._id !== recipe.defaultSnapshot"
-                @click="setAsDefault(currentSnapshot._id)"
+                v-if="!isNewRecipe && currentRecipe && dish && currentRecipe._id !== dish.defaultRecipe"
+                @click="setAsDefault(currentRecipe._id)"
                 class="set-default-header-btn"
-                title="Set as default snapshot"
+                title="Set as default recipe"
               >
                 <img src="/assets/filled_in_star.png" alt="Star" class="star-icon-small" />
                 Set as Default
               </button>
               <span
-                v-if="!isNewSnapshot && currentSnapshot && recipe && currentSnapshot._id === recipe.defaultSnapshot"
+                v-if="!isNewRecipe && currentRecipe && dish && currentRecipe._id === dish.defaultRecipe"
                 class="default-badge"
-                title="This is the default snapshot"
+                title="This is the default recipe"
               >
                 <img src="/assets/filled_in_star.png" alt="Star" class="star-icon-small" />
                 Default
@@ -70,11 +70,19 @@
           <div class="recipe-image-container" :class="{ editable: editMode }">
             <div v-if="editMode" class="edit-indicator">
               <img src="/assets/pencil.png" alt="Edit" class="edit-indicator-icon" />
+              <input
+                ref="imageUploadRef"
+                type="file"
+                accept="image/*"
+                @change="handleImageUpload"
+                style="display: none"
+              />
+              <button @click="triggerImageUpload" class="upload-image-btn">Upload Image</button>
             </div>
             <img
-              v-if="currentSnapshot && currentSnapshot.pictures && currentSnapshot.pictures.length > 0"
-              :src="currentSnapshot.pictures[0]"
-              :alt="recipe.name"
+              v-if="currentRecipe && currentRecipe.pictures && currentRecipe.pictures.length > 0"
+              :src="currentRecipe.pictures[0]"
+              :alt="dish.name"
               class="recipe-image"
             />
             <div v-else class="no-image">No image</div>
@@ -83,10 +91,10 @@
           <div class="recipe-meta">
             <div class="meta-item" :class="{ editable: editMode }">
               <span class="meta-label">Date Made:</span>
-              <span v-if="!editMode" class="meta-value">{{ formatDate(editableSnapshot.date || currentSnapshot?.date) }}</span>
+              <span v-if="!editMode" class="meta-value">{{ formatDate(editableRecipe.date || currentRecipe?.date) }}</span>
               <input
                 v-else
-                v-model="editableSnapshot.date"
+                v-model="editableRecipe.date"
                 type="date"
                 class="meta-input"
               />
@@ -98,12 +106,12 @@
                 <img
                   v-for="i in 5"
                   :key="i"
-                  :src="i <= (editableSnapshot.ranking || currentSnapshot?.ranking || 0) ? '/assets/filled_in_star.png' : '/assets/blank_star.png'"
+                  :src="i <= (editableRecipe.ranking || currentRecipe?.ranking || 0) ? '/assets/filled_in_star.png' : '/assets/blank_star.png'"
                   alt="star"
                   class="star-icon"
                 />
               </div>
-              <select v-else v-model.number="editableSnapshot.ranking" class="rating-select">
+              <select v-else v-model.number="editableRecipe.ranking" class="rating-select">
                 <option v-for="i in 5" :key="i" :value="i">{{ i }} Star{{ i > 1 ? 's' : '' }}</option>
               </select>
             </div>
@@ -114,39 +122,39 @@
         <div class="page right-page">
           <!-- Tab Content - Brown background shows through -->
           <div class="tab-content-wrapper">
-            <!-- Snapshot Tabs - Manila folder style, overlapping, right-aligned -->
-            <div class="snapshot-tabs-container">
-              <div class="snapshot-tabs" ref="tabsContainer">
-              <!-- New Snapshot Tab - Always first (leftmost) -->
+            <!-- Recipe Tabs - Manila folder style, overlapping, right-aligned -->
+            <div class="recipe-tabs-container">
+              <div class="recipe-tabs" ref="tabsContainer">
+              <!-- New Recipe Tab - Always first (leftmost) -->
               <div
-                class="snapshot-tab new-tab"
-                :class="{ active: isNewSnapshot }"
-                @click="createNewSnapshot"
+                class="recipe-tab new-tab"
+                :class="{ active: isNewRecipe }"
+                @click="createNewRecipe"
               >
                 <img src="/assets/plus_sign.png" alt="New" class="plus-icon" />
                 New
               </div>
               
-              <!-- Existing snapshots - newest first, oldest last (left to right after new button) -->
+              <!-- Existing recipes - newest first, oldest last (left to right after new button) -->
               <div
-                v-for="(snapshot, index) in sortedSnapshots"
-                :key="snapshot._id || index"
-                class="snapshot-tab"
+                v-for="(recipe, index) in sortedRecipes"
+                :key="recipe._id || index"
+                class="recipe-tab"
                 :class="{ 
-                  active: currentSnapshotIndex === index && !isNewSnapshot, 
-                  default: recipe && snapshot._id === recipe.defaultSnapshot 
+                  active: currentRecipeIndex === index && !isNewRecipe, 
+                  default: dish && recipe._id === dish.defaultRecipe 
                 }"
-                @click="switchSnapshot(index)"
+                @click="switchRecipe(index)"
               >
-                <span class="tab-label">{{ formatDateShort(snapshot.date) || snapshot.subname || `Snapshot ${index + 1}` }}</span>
-                <img v-if="recipe && snapshot._id === recipe.defaultSnapshot" src="/assets/filled_in_star.png" alt="Default" class="default-icon" title="Default Snapshot" />
+                <span class="tab-label">{{ formatDateShort(recipe.date) || recipe.subname || `Recipe ${index + 1}` }}</span>
+                <img v-if="dish && recipe._id === dish.defaultRecipe" src="/assets/filled_in_star.png" alt="Default" class="default-icon" title="Default Recipe" />
               </div>
               </div>
             </div>
           
           <!-- Tab Content -->
           <div class="tab-content">
-            <!-- Always show content, even if no snapshots exist -->
+            <!-- Always show content, even if no recipes exist -->
             <div class="content-section">
               <div class="section" :class="{ editable: editMode }">
                 <div v-if="editMode" class="edit-indicator">
@@ -155,12 +163,12 @@
                 <h3 class="section-title">Ingredients</h3>
                 <textarea
                   v-if="editMode"
-                  v-model="editableSnapshot.ingredientsList"
+                  v-model="editableRecipe.ingredientsList"
                   class="section-input"
                   rows="8"
                   placeholder="Enter ingredients..."
                 ></textarea>
-                <div v-else class="section-content" v-html="formatMarkdown(editableSnapshot.ingredientsList || currentSnapshot?.ingredientsList || 'No ingredients listed')"></div>
+                <div v-else class="section-content" v-html="formatMarkdown(editableRecipe.ingredientsList || currentRecipe?.ingredientsList || 'No ingredients listed')"></div>
               </div>
               
               <div class="section" :class="{ editable: editMode }">
@@ -170,12 +178,12 @@
                 <h3 class="section-title">Instructions</h3>
                 <textarea
                   v-if="editMode"
-                  v-model="editableSnapshot.instructions"
+                  v-model="editableRecipe.instructions"
                   class="section-input"
                   rows="10"
                   placeholder="Enter instructions..."
                 ></textarea>
-                <div v-else class="section-content" v-html="formatMarkdown(editableSnapshot.instructions || currentSnapshot?.instructions || 'No instructions listed')"></div>
+                <div v-else class="section-content" v-html="formatMarkdown(editableRecipe.instructions || currentRecipe?.instructions || 'No instructions listed')"></div>
               </div>
               
               <div class="section" :class="{ editable: editMode }">
@@ -185,12 +193,12 @@
                 <h3 class="section-title">Notes</h3>
                 <textarea
                   v-if="editMode"
-                  v-model="editableSnapshot.note"
+                  v-model="editableRecipe.note"
                   class="section-input"
                   rows="6"
                   placeholder="Enter notes..."
                 ></textarea>
-                <div v-else class="section-content" v-html="formatMarkdown(editableSnapshot.note || currentSnapshot?.note || 'No notes')"></div>
+                <div v-else class="section-content" v-html="formatMarkdown(editableRecipe.note || currentRecipe?.note || 'No notes')"></div>
               </div>
             </div>
           </div>
@@ -244,16 +252,16 @@ const authStore = useAuthStore()
 const currentBookId = ref(null)
 const currentBookName = ref('Recipe Book')
 
-const recipe = ref(null)
-const recipeIdFromRoute = ref(null)
+const dish = ref(null)
+const dishIdFromRoute = ref(null)
 const loading = ref(false)
 const error = ref('')
 const editMode = ref(false)
 const saving = ref(false)
-const currentSnapshotIndex = ref(0)
-const isNewSnapshot = ref(true) // Start with new snapshot if no snapshots exist
-const editableRecipeName = ref('New Recipe')
-const editableSnapshot = ref({
+const currentRecipeIndex = ref(0)
+const isNewRecipe = ref(true) // Start with new recipe if no recipes exist
+const editableDishName = ref('New Dish')
+const editableRecipe = ref({
   ingredientsList: '',
   instructions: '',
   note: '',
@@ -263,11 +271,12 @@ const editableSnapshot = ref({
   pictures: []
 })
 const tabsContainer = ref(null)
-const snapshotsBackup = ref([])
+const recipesBackup = ref([])
+const imageUploadRef = ref(null)
 
-// Sort snapshots by date, newest first (for display: New button, then newest, then older)
-const sortedSnapshots = computed(() => {
-  return [...recipesStore.snapshots].sort((a, b) => {
+// Sort recipes by date, newest first (for display: New button, then newest, then older)
+const sortedRecipes = computed(() => {
+  return [...recipesStore.recipes].sort((a, b) => {
     const dateA = new Date(a.date || 0)
     const dateB = new Date(b.date || 0)
     return dateB - dateA // Most recent first (newest first)
@@ -285,14 +294,14 @@ function formatDateShort(dateString) {
   return `${month}/${day}/${year}`
 }
 
-const currentSnapshot = computed(() => {
-  if (isNewSnapshot.value || currentSnapshotIndex.value === -1) return null
-  return sortedSnapshots.value[currentSnapshotIndex.value] || null
+const currentRecipe = computed(() => {
+  if (isNewRecipe.value || currentRecipeIndex.value === -1) return null
+  return sortedRecipes.value[currentRecipeIndex.value] || null
 })
 
-async function loadRecipe() {
-  const recipeId = route.params.id
-  recipeIdFromRoute.value = recipeId
+async function loadDish() {
+  const dishId = route.params.id
+  dishIdFromRoute.value = dishId
   
   // Get book ID from query or sessionStorage
   const bookIdFromQuery = route.query.book
@@ -319,29 +328,29 @@ async function loadRecipe() {
   }
   
   // Check if this is a temporary ID (starts with "temp-")
-  const isTempId = recipeId && recipeId.startsWith('temp-')
+  const isTempId = dishId && dishId.startsWith('temp-')
   
-  // Clear snapshots for new recipes to ensure blank slate
+  // Clear recipes for new dishes to ensure blank slate
   if (isTempId) {
-    recipesStore.snapshots = []
-    snapshotsBackup.value = []
-    // Open new recipes in edit mode
+    recipesStore.recipes = []
+    recipesBackup.value = []
+    // Open new dishes in edit mode
     editMode.value = true
   }
   
   // Show empty state immediately
-  if (!recipe.value) {
-    recipe.value = {
-      _id: recipeId,
-      name: 'New Recipe',
+  if (!dish.value) {
+    dish.value = {
+      _id: dishId,
+      name: 'New Dish',
       description: '',
-      snapshots: [],
-      defaultSnapshot: null
+      recipes: [],
+      defaultRecipe: null
     }
-    editableRecipeName.value = 'New Recipe'
-    isNewSnapshot.value = true
-    currentSnapshotIndex.value = -1
-    loadSnapshotData(null)
+    editableDishName.value = 'New Dish'
+    isNewRecipe.value = true
+    currentRecipeIndex.value = -1
+    loadRecipeData(null)
   }
   
   loading.value = true
@@ -350,83 +359,83 @@ async function loadRecipe() {
   try {
     if (!isTempId) {
       try {
-        await recipesStore.fetchRecipe(recipeId)
-        const fetchedRecipe = recipesStore.currentRecipe
-        if (fetchedRecipe) {
+        await recipesStore.fetchDish(dishId)
+        const fetchedDish = recipesStore.currentDish
+        if (fetchedDish) {
           // Create a separate copy to avoid reactivity issues
-          recipe.value = { ...fetchedRecipe }
-          editableRecipeName.value = fetchedRecipe.name
+          dish.value = { ...fetchedDish }
+          editableDishName.value = fetchedDish.name
           
-          // If we don't have a book ID yet, try to find which book contains this recipe
+          // If we don't have a book ID yet, try to find which book contains this dish
           if (!currentBookId.value) {
             try {
               await recipeBooksStore.fetchBooks()
-              const bookWithRecipe = recipeBooksStore.books.find(book => 
-                book.recipes && book.recipes.includes(fetchedRecipe._id)
+              const bookWithDish = recipeBooksStore.books.find(book => 
+                book.dishes && book.dishes.includes(fetchedDish._id)
               )
-              if (bookWithRecipe) {
-                currentBookId.value = bookWithRecipe._id
-                currentBookName.value = bookWithRecipe.name
+              if (bookWithDish) {
+                currentBookId.value = bookWithDish._id
+                currentBookName.value = bookWithDish.name
               }
             } catch (bookErr) {
-              console.warn('Failed to find book for recipe:', bookErr)
+              console.warn('Failed to find book for dish:', bookErr)
             }
           }
         }
       } catch (fetchErr) {
-        // If fetch fails, recipe might not exist yet - keep empty state
-        console.warn('Failed to fetch recipe:', fetchErr)
+        // If fetch fails, dish might not exist yet - keep empty state
+        console.warn('Failed to fetch dish:', fetchErr)
       }
     }
     
-      // Load snapshots if recipe exists and has snapshots (but not for temp IDs)
-      if (!isTempId && recipe.value && recipe.value.snapshots && recipe.value.snapshots.length > 0) {
-        await recipesStore.fetchSnapshots(recipe.value._id)
+      // Load recipes if dish exists and has recipes (but not for temp IDs)
+      if (!isTempId && dish.value && dish.value.recipes && dish.value.recipes.length > 0) {
+        await recipesStore.fetchRecipes(dish.value._id)
         // Update backup after loading
-        if (recipesStore.snapshots.length > 0) {
-          snapshotsBackup.value = [...recipesStore.snapshots]
+        if (recipesStore.recipes.length > 0) {
+          recipesBackup.value = [...recipesStore.recipes]
         }
       } else {
-        // Clear snapshots for new recipes (temp IDs) or recipes with no snapshots
-        recipesStore.snapshots = []
-        snapshotsBackup.value = []
+        // Clear recipes for new dishes (temp IDs) or dishes with no recipes
+        recipesStore.recipes = []
+        recipesBackup.value = []
       }
       
-      if (recipe.value && sortedSnapshots.value.length > 0) {
-        // Check if there's a snapshot query parameter
-        const snapshotId = route.query.snapshot
-        if (snapshotId) {
-          const index = sortedSnapshots.value.findIndex(s => s._id === snapshotId)
+      if (dish.value && sortedRecipes.value.length > 0) {
+        // Check if there's a recipe query parameter
+        const recipeId = route.query.recipe
+        if (recipeId) {
+          const index = sortedRecipes.value.findIndex(r => r._id === recipeId)
           if (index !== -1) {
-            currentSnapshotIndex.value = index
-            isNewSnapshot.value = false
-            loadSnapshotData(sortedSnapshots.value[index])
+            currentRecipeIndex.value = index
+            isNewRecipe.value = false
+            loadRecipeData(sortedRecipes.value[index])
           }
-        } else if (recipe.value?.defaultSnapshot) {
-          const defaultIndex = sortedSnapshots.value.findIndex(s => s._id === recipe.value.defaultSnapshot)
+        } else if (dish.value?.defaultRecipe) {
+          const defaultIndex = sortedRecipes.value.findIndex(r => r._id === dish.value.defaultRecipe)
           if (defaultIndex !== -1) {
-            currentSnapshotIndex.value = defaultIndex
-            isNewSnapshot.value = false
-            loadSnapshotData(sortedSnapshots.value[defaultIndex])
+            currentRecipeIndex.value = defaultIndex
+            isNewRecipe.value = false
+            loadRecipeData(sortedRecipes.value[defaultIndex])
           }
         } else {
-          // Load most recent snapshot (index 0 - newest, after new button)
-          currentSnapshotIndex.value = 0
-          isNewSnapshot.value = false
-          loadSnapshotData(sortedSnapshots.value[0])
+          // Load most recent recipe (index 0 - newest, after new button)
+          currentRecipeIndex.value = 0
+          isNewRecipe.value = false
+          loadRecipeData(sortedRecipes.value[0])
         }
-      } else if (recipe.value && !isTempId) {
-        // Recipe exists but no snapshots - show empty new snapshot
-        isNewSnapshot.value = true
-        currentSnapshotIndex.value = -1
-        loadSnapshotData(null)
+      } else if (dish.value && !isTempId) {
+        // Dish exists but no recipes - show empty new recipe
+        isNewRecipe.value = true
+        currentRecipeIndex.value = -1
+        loadRecipeData(null)
       } else {
-      // Recipe doesn't exist yet - create it
-      // Open in edit mode for new recipes
+      // Dish doesn't exist yet - create it
+      // Open in edit mode for new dishes
       editMode.value = true
       try {
-        // Try to create recipe with a timeout
-        const createPromise = recipesStore.createRecipe('New Recipe', '')
+        // Try to create dish with a timeout
+        const createPromise = recipesStore.createDish('New Dish', '')
         const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error('Creation timeout')), 5000)
         )
@@ -434,17 +443,17 @@ async function loadRecipe() {
         try {
           const createdId = await Promise.race([createPromise, timeoutPromise])
           if (createdId) {
-            recipe.value._id = createdId
+            dish.value._id = createdId
             // Check if there's a pending book to add it to
             const bookId = currentBookId.value || sessionStorage.getItem('pendingRecipeBook')
             if (bookId) {
               try {
                 // Check if already in book
                 const book = await recipeBooksStore.fetchBook(bookId)
-                const isAlreadyInBook = book?.recipes?.includes(createdId)
+                const isAlreadyInBook = book?.dishes?.includes(createdId)
                 
                 if (!isAlreadyInBook) {
-                  await recipeBooksStore.addRecipeToBook(createdId, bookId)
+                  await recipeBooksStore.addDishToBook(createdId, bookId)
                 }
                 
                 if (sessionStorage.getItem('pendingRecipeBook')) {
@@ -463,11 +472,11 @@ async function loadRecipe() {
                   }
                 }
               } catch (bookErr) {
-                console.warn('Failed to add recipe to book:', bookErr)
+                console.warn('Failed to add dish to book:', bookErr)
               }
             }
             
-            // Update URL with real recipe ID if it's a temp ID
+            // Update URL with real dish ID if it's a temp ID
             if (isTempId && currentBookId.value) {
               router.replace(`/recipe/${createdId}?book=${currentBookId.value}`)
             } else if (isTempId) {
@@ -475,39 +484,39 @@ async function loadRecipe() {
             }
           }
         } catch (createErr) {
-          console.warn('Recipe creation timed out or failed:', createErr)
+          console.warn('Dish creation timed out or failed:', createErr)
           // Keep showing empty state - user can save manually
         }
       } catch (createErr) {
-        console.warn('Failed to create recipe:', createErr)
+        console.warn('Failed to create dish:', createErr)
       }
       
       // If creation failed, show empty state with placeholder
-      recipe.value = {
-        _id: recipeId,
-        name: 'New Recipe',
+      dish.value = {
+        _id: dishId,
+        name: 'New Dish',
         description: '',
-        snapshots: [],
-        defaultSnapshot: null
+        recipes: [],
+        defaultRecipe: null
       }
-      editableRecipeName.value = 'New Recipe'
-      isNewSnapshot.value = true
-      currentSnapshotIndex.value = -1
-      loadSnapshotData(null)
+      editableDishName.value = 'New Dish'
+      isNewRecipe.value = true
+      currentRecipeIndex.value = -1
+      loadRecipeData(null)
     }
   } catch (err) {
-    error.value = err.message || 'Failed to load recipe'
-    // Even on error, show the recipe page with empty state
-    if (!recipe.value) {
-      recipe.value = {
-        _id: recipeId,
-        name: 'New Recipe',
+    error.value = err.message || 'Failed to load dish'
+    // Even on error, show the dish page with empty state
+    if (!dish.value) {
+      dish.value = {
+        _id: dishId,
+        name: 'New Dish',
         description: '',
-        snapshots: [],
-        defaultSnapshot: null
+        recipes: [],
+        defaultRecipe: null
       }
-      editableRecipeName.value = 'New Recipe'
-      isNewSnapshot.value = true
+      editableDishName.value = 'New Dish'
+      isNewRecipe.value = true
       currentSnapshotIndex.value = -1
       loadSnapshotData(null)
     }
@@ -516,9 +525,9 @@ async function loadRecipe() {
   }
 }
 
-function loadSnapshotData(snapshot) {
-  if (!snapshot) {
-    editableSnapshot.value = {
+function loadRecipeData(recipe) {
+  if (!recipe) {
+    editableRecipe.value = {
       ingredientsList: '',
       instructions: '',
       note: '',
@@ -530,30 +539,30 @@ function loadSnapshotData(snapshot) {
     return
   }
   
-  editableSnapshot.value = {
-    ingredientsList: snapshot.ingredientsList || '',
-    instructions: snapshot.instructions || '',
-    note: snapshot.note || '',
-    date: snapshot.date ? snapshot.date.split('T')[0] : new Date().toISOString().split('T')[0],
-    ranking: snapshot.ranking || 1,
-    subname: snapshot.subname || '',
-    pictures: snapshot.pictures || []
+  editableRecipe.value = {
+    ingredientsList: recipe.ingredientsList || '',
+    instructions: recipe.instructions || '',
+    note: recipe.note || '',
+    date: recipe.date ? recipe.date.split('T')[0] : new Date().toISOString().split('T')[0],
+    ranking: recipe.ranking || 1,
+    subname: recipe.subname || '',
+    pictures: recipe.pictures || []
   }
 }
 
-function switchSnapshot(index) {
-  // Index in sortedSnapshots (most recent first, index 0 = newest)
-  currentSnapshotIndex.value = index
-  isNewSnapshot.value = false
-  loadSnapshotData(sortedSnapshots.value[index])
+function switchRecipe(index) {
+  // Index in sortedRecipes (most recent first, index 0 = newest)
+  currentRecipeIndex.value = index
+  isNewRecipe.value = false
+  loadRecipeData(sortedRecipes.value[index])
   scrollToTab(index) // Scroll to this tab (newest is index 0, on left)
 }
 
-function createNewSnapshot() {
-  isNewSnapshot.value = true
-  // New snapshot is always first (leftmost)
-  currentSnapshotIndex.value = -1 // Use -1 to indicate new snapshot
-  editableSnapshot.value = {
+function createNewRecipe() {
+  isNewRecipe.value = true
+  // New recipe is always first (leftmost)
+  currentRecipeIndex.value = -1 // Use -1 to indicate new recipe
+  editableRecipe.value = {
     ingredientsList: '',
     instructions: '',
     note: '',
@@ -565,11 +574,70 @@ function createNewSnapshot() {
   scrollToTab(-1) // Scroll to new tab (first in visual order)
 }
 
+function triggerImageUpload() {
+  imageUploadRef.value?.click()
+}
+
+async function handleImageUpload(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  
+  // Need a recipe ID to upload - create one if we don't have it yet
+  let recipeId = currentRecipe.value?._id
+  if (!recipeId && dish.value?._id) {
+    // Create a new recipe first if we don't have one
+    try {
+      recipeId = await recipesStore.createRecipe({
+        dish: dish.value._id,
+        ingredientsList: editableRecipe.value.ingredientsList,
+        subname: editableRecipe.value.subname || 'New Recipe',
+        pictures: [],
+        date: editableRecipe.value.date,
+        instructions: editableRecipe.value.instructions,
+        note: editableRecipe.value.note,
+        ranking: editableRecipe.value.ranking
+      })
+    } catch (err) {
+      error.value = 'Failed to create recipe for image upload: ' + err.message
+      return
+    }
+  }
+  
+  if (!recipeId) {
+    error.value = 'Cannot upload image: no recipe ID available'
+    return
+  }
+  
+  try {
+    saving.value = true
+    const result = await recipesStore.uploadRecipeImage(recipeId, file)
+    if (result?.image?.secureUrl) {
+      // Add the uploaded image URL to the pictures array
+      if (!editableRecipe.value.pictures) {
+        editableRecipe.value.pictures = []
+      }
+      editableRecipe.value.pictures.push(result.image.secureUrl)
+      // Update the current recipe if it exists
+      if (currentRecipe.value) {
+        currentRecipe.value.pictures = [...editableRecipe.value.pictures]
+      }
+    }
+  } catch (err) {
+    error.value = 'Failed to upload image: ' + err.message
+  } finally {
+    saving.value = false
+    // Reset the file input
+    if (imageUploadRef.value) {
+      imageUploadRef.value.value = ''
+    }
+  }
+}
+
 function scrollToTab(index) {
   nextTick(() => {
     if (tabsContainer.value) {
-      const tabs = tabsContainer.value.querySelectorAll('.snapshot-tab')
-      // Tabs order: [new tab (index 0), newest snapshot (index 1), ..., oldest snapshot]
+      const tabs = tabsContainer.value.querySelectorAll('.recipe-tab')
+      // Tabs order: [new tab (index 0), newest recipe (index 1), ..., oldest recipe]
       // Index -1 means new tab (first tab, index 0)
       const targetIndex = index === -1 ? 0 : (index + 1) // +1 because new tab is first
       if (tabs[targetIndex]) {
@@ -587,46 +655,46 @@ async function toggleEditMode() {
     let saveErrors = []
     
     try {
-      // Save recipe name first (this creates recipe if needed)
+      // Save dish name first (this creates dish if needed)
       try {
-        await updateRecipeName()
+        await updateDishName()
       } catch (err) {
         const isTimeout = err.message?.includes('timed out') || err.message?.includes('Request timed out')
         if (isTimeout) {
-          saveErrors.push('Recipe name save timed out. Your changes are saved locally. You can try saving again later.')
-          console.warn('Recipe name save timed out, continuing with snapshot save...')
-          // Continue - allow snapshot to save even if recipe name timed out
+          saveErrors.push('Dish name save timed out. Your changes are saved locally. You can try saving again later.')
+          console.warn('Dish name save timed out, continuing with recipe save...')
+          // Continue - allow recipe to save even if dish name timed out
         } else {
           throw err // Re-throw non-timeout errors
         }
       }
       
-      // Then save snapshot (needs recipe ID)
+      // Then save recipe (needs dish ID)
       try {
-        await saveSnapshot()
+        await saveRecipe()
       } catch (err) {
         const isTimeout = err.message?.includes('timed out') || err.message?.includes('Request timed out')
         if (isTimeout) {
-          saveErrors.push('Snapshot save timed out. Your changes are saved locally. You can try saving again later.')
-          console.warn('Snapshot save timed out')
+          saveErrors.push('Recipe save timed out. Your changes are saved locally. You can try saving again later.')
+          console.warn('Recipe save timed out')
         } else {
           throw err // Re-throw non-timeout errors
         }
       }
       
-      // Add recipe to book on first save (if book ID is available) - non-blocking
+      // Add dish to book on first save (if book ID is available) - non-blocking
       const bookId = currentBookId.value || sessionStorage.getItem('pendingRecipeBook')
-      const recipeId = recipe.value?._id
-      if (bookId && recipeId && !recipeId.startsWith('temp-')) {
+      const dishId = dish.value?._id
+      if (bookId && dishId && !dishId.startsWith('temp-')) {
         try {
-          // Check if recipe is already in the book
+          // Check if dish is already in the book
           const book = await recipeBooksStore.fetchBook(bookId)
-          const isAlreadyInBook = book?.recipes?.includes(recipeId)
+          const isAlreadyInBook = book?.dishes?.includes(dishId)
           
           if (!isAlreadyInBook) {
             // First time saving - add to book
-            await recipeBooksStore.addRecipeToBook(recipeId, bookId)
-            console.log('Recipe added to book successfully on first save')
+            await recipeBooksStore.addDishToBook(dishId, bookId)
+            console.log('Dish added to book successfully on first save')
           }
           
           // Clean up sessionStorage
@@ -652,8 +720,8 @@ async function toggleEditMode() {
           if (isTimeout) {
             saveErrors.push('Adding recipe to book timed out. You can add it manually from the book view.')
           } else {
-            console.warn('Failed to add recipe to book:', bookErr)
-            saveErrors.push('Recipe saved but failed to add to book. You can add it manually from the book view.')
+            console.warn('Failed to add dish to book:', bookErr)
+            saveErrors.push('Dish saved but failed to add to book. You can add it manually from the book view.')
           }
           // Keep in sessionStorage for retry
         }
@@ -686,59 +754,59 @@ async function toggleEditMode() {
   }
 }
 
-async function saveSnapshot() {
-  if (!recipeIdFromRoute.value) return
+async function saveRecipe() {
+  if (!dishIdFromRoute.value) return
   
-  // Ensure recipe exists first
-  if (!recipe.value?._id || recipe.value._id.startsWith('temp-')) {
-    // Recipe doesn't exist yet - create it first
-    await updateRecipeName()
+  // Ensure dish exists first
+  if (!dish.value?._id || dish.value._id.startsWith('temp-')) {
+    // Dish doesn't exist yet - create it first
+    await updateDishName()
   }
   
-  const recipeId = recipe.value?._id || recipeIdFromRoute.value
-  if (!recipeId || recipeId.startsWith('temp-')) {
-    console.warn('Cannot save snapshot - recipe not created yet')
+  const dishId = dish.value?._id || dishIdFromRoute.value
+  if (!dishId || dishId.startsWith('temp-')) {
+    console.warn('Cannot save recipe - dish not created yet')
     return
   }
   
   try {
-    if (isNewSnapshot.value) {
+    if (isNewRecipe.value) {
       // Only create if there's actual content
-      const hasContent = editableSnapshot.value.ingredientsList.trim() || 
-                        editableSnapshot.value.instructions.trim() || 
-                        editableSnapshot.value.note.trim() ||
-                        editableSnapshot.value.subname.trim()
+      const hasContent = editableRecipe.value.ingredientsList.trim() || 
+                        editableRecipe.value.instructions.trim() || 
+                        editableRecipe.value.note.trim() ||
+                        editableRecipe.value.subname.trim()
       
       if (hasContent) {
-        // Create new snapshot
-        const snapshotId = await recipesStore.createSnapshot({
-          ...editableSnapshot.value,
-          recipe: recipeId
+        // Create new recipe
+        const recipeId = await recipesStore.createRecipe({
+          ...editableRecipe.value,
+          dish: dishId
         })
         
-        // If this is the first snapshot, set it as default
-        if (sortedSnapshots.value.length === 0) {
-          await recipesStore.setDefaultSnapshot(snapshotId, recipeId)
+        // If this is the first recipe, set it as default
+        if (sortedRecipes.value.length === 0) {
+          await recipesStore.setDefaultRecipe(recipeId, dishId)
         }
         
-        // Reload snapshots
-        await recipesStore.fetchSnapshots(recipeId)
+        // Reload recipes
+        await recipesStore.fetchRecipes(dishId)
         // Update backup after fetching
-        if (recipesStore.snapshots.length > 0) {
-          snapshotsBackup.value = [...recipesStore.snapshots]
+        if (recipesStore.recipes.length > 0) {
+          recipesBackup.value = [...recipesStore.recipes]
         }
-        // After creating, switch to the newly created snapshot (it will be index 0 - newest)
-        // Then prepare a new empty snapshot tab
-        if (sortedSnapshots.value.length > 0) {
-          // Switch to the newly created snapshot (newest, index 0)
-          currentSnapshotIndex.value = 0
-          isNewSnapshot.value = false
-          loadSnapshotData(sortedSnapshots.value[0])
+        // After creating, switch to the newly created recipe (it will be index 0 - newest)
+        // Then prepare a new empty recipe tab
+        if (sortedRecipes.value.length > 0) {
+          // Switch to the newly created recipe (newest, index 0)
+          currentRecipeIndex.value = 0
+          isNewRecipe.value = false
+          loadRecipeData(sortedRecipes.value[0])
         } else {
-          // If no snapshots loaded, stay in new snapshot mode
-          isNewSnapshot.value = true
-          currentSnapshotIndex.value = -1
-          editableSnapshot.value = {
+          // If no recipes loaded, stay in new recipe mode
+          isNewRecipe.value = true
+          currentRecipeIndex.value = -1
+          editableRecipe.value = {
             ingredientsList: '',
             instructions: '',
             note: '',
@@ -749,54 +817,54 @@ async function saveSnapshot() {
           }
         }
       }
-    } else if (currentSnapshot.value) {
-      // Update existing snapshot
-      await recipesStore.updateSnapshot(currentSnapshot.value._id, {
-        ...editableSnapshot.value,
-        recipe: recipeId
+    } else if (currentRecipe.value) {
+      // Update existing recipe
+      await recipesStore.updateRecipe(currentRecipe.value._id, {
+        ...editableRecipe.value,
+        dish: dishId
       })
-      await recipesStore.fetchSnapshots(recipeId)
+      await recipesStore.fetchRecipes(dishId)
     }
   } catch (err) {
-    error.value = err.message || 'Failed to save snapshot'
+    error.value = err.message || 'Failed to save recipe'
     console.error('Save error:', err)
     throw err // Re-throw so toggleEditMode knows it failed
   }
 }
 
-async function handleRecipeNameBlur() {
+async function handleDishNameBlur() {
   // Just update the local value, actual save happens on toggleEditMode
   // This prevents multiple API calls while typing
 }
 
-async function updateRecipeName() {
-  if (!recipeIdFromRoute.value) return
+async function updateDishName() {
+  if (!dishIdFromRoute.value) return
   
-  const recipeId = recipe.value?._id || recipeIdFromRoute.value
-  const newName = editableRecipeName.value.trim()
+  const dishId = dish.value?._id || dishIdFromRoute.value
+  const newName = editableDishName.value.trim()
   
   if (!newName) {
-    editableRecipeName.value = recipe.value?.name || 'New Recipe'
+    editableDishName.value = dish.value?.name || 'New Dish'
     return
   }
   
   // Don't update if name hasn't changed
-  if (recipe.value?.name === newName && recipe.value?._id && !recipe.value._id.startsWith('temp-')) {
+  if (dish.value?.name === newName && dish.value?._id && !dish.value._id.startsWith('temp-')) {
     return
   }
   
   try {
-    // If recipe doesn't exist yet or has temp ID, create it
-    const isTempId = recipeId.startsWith('temp-')
-    if (!recipe.value?._id || isTempId) {
-      const createdId = await recipesStore.createRecipe(newName, recipe.value?.description || '')
+    // If dish doesn't exist yet or has temp ID, create it
+    const isTempId = dishId.startsWith('temp-')
+    if (!dish.value?._id || isTempId) {
+      const createdId = await recipesStore.createDish(newName, dish.value?.description || '')
       if (createdId) {
-        recipe.value = {
+        dish.value = {
           _id: createdId,
           name: newName,
-          description: recipe.value?.description || '',
-          snapshots: [],
-          defaultSnapshot: null
+          description: dish.value?.description || '',
+          recipes: [],
+          defaultRecipe: null
         }
         
         // Update route if it was a temp ID
@@ -804,7 +872,7 @@ async function updateRecipeName() {
           const bookId = currentBookId.value || sessionStorage.getItem('pendingRecipeBook')
           const newUrl = bookId ? `/recipe/${createdId}?book=${bookId}` : `/recipe/${createdId}`
           router.replace(newUrl)
-          recipeIdFromRoute.value = createdId
+          dishIdFromRoute.value = createdId
         }
         
         // Try to add to book
@@ -813,10 +881,10 @@ async function updateRecipeName() {
           try {
             // Check if already in book
             const book = await recipeBooksStore.fetchBook(bookId)
-            const isAlreadyInBook = book?.recipes?.includes(createdId)
+            const isAlreadyInBook = book?.dishes?.includes(createdId)
             
             if (!isAlreadyInBook) {
-              await recipeBooksStore.addRecipeToBook(createdId, bookId)
+              await recipeBooksStore.addDishToBook(createdId, bookId)
             }
             
             if (sessionStorage.getItem('pendingRecipeBook')) {
@@ -835,7 +903,7 @@ async function updateRecipeName() {
               }
             }
           } catch (bookErr) {
-            console.warn('Failed to add recipe to book:', bookErr)
+            console.warn('Failed to add dish to book:', bookErr)
           }
         }
         
@@ -846,79 +914,79 @@ async function updateRecipeName() {
           router.replace(`/recipe/${createdId}`)
         }
       }
-    } else if (newName !== recipe.value.name) {
-      await recipesStore.updateRecipe(recipe.value._id, newName, recipe.value.description || '')
-      if (recipe.value) {
-        recipe.value.name = newName
+    } else if (newName !== dish.value.name) {
+      await recipesStore.updateDish(dish.value._id, newName, dish.value.description || '')
+      if (dish.value) {
+        dish.value.name = newName
       }
     }
   } catch (err) {
-    error.value = err.message || 'Failed to update recipe name'
-    editableRecipeName.value = recipe.value?.name || 'New Recipe'
+    error.value = err.message || 'Failed to update dish name'
+    editableDishName.value = dish.value?.name || 'New Dish'
     throw err
   }
 }
 
-async function setAsDefault(snapshotId) {
-  if (!recipe.value) return
+async function setAsDefault(recipeId) {
+  if (!dish.value) return
   
   // Save current state - create immutable backup
-  const snapshotsBefore = [...recipesStore.snapshots]
-  const currentSnapshotIndexBefore = currentSnapshotIndex.value
-  const currentSnapshotIdBefore = currentSnapshot.value?._id
+  const recipesBefore = [...recipesStore.recipes]
+  const currentRecipeIndexBefore = currentRecipeIndex.value
+  const currentRecipeIdBefore = currentRecipe.value?._id
   
   // Update backup ref so watcher can restore if needed
-  snapshotsBackup.value = [...snapshotsBefore]
+  recipesBackup.value = [...recipesBefore]
   
   try {
     // Make the API call directly - don't use store method to avoid side effects
-    const { recipeAPI } = await import('../api/api')
-    await recipeAPI.setDefaultSnapshot(snapshotId, recipe.value._id)
+    const { dishesAPI } = await import('../api/api')
+    await dishesAPI.setDefaultRecipe(recipeId, dish.value._id)
     
-    // Update the local recipe ref
-    if (recipe.value) {
-      recipe.value.defaultSnapshot = snapshotId
+    // Update the local dish ref
+    if (dish.value) {
+      dish.value.defaultRecipe = recipeId
     }
     
-    // IMPORTANT: Also update store's currentRecipe so calendar and other views see the change
-    // This ensures that if the calendar has this recipe loaded, it will see the updated default
-    if (recipesStore.currentRecipe && recipesStore.currentRecipe._id === recipe.value._id) {
-      recipesStore.currentRecipe.defaultSnapshot = snapshotId
+    // IMPORTANT: Also update store's currentDish so calendar and other views see the change
+    // This ensures that if the calendar has this dish loaded, it will see the updated default
+    if (recipesStore.currentDish && recipesStore.currentDish._id === dish.value._id) {
+      recipesStore.currentDish.defaultRecipe = recipeId
       // Force reactivity update
-      recipesStore.currentRecipe = { ...recipesStore.currentRecipe }
+      recipesStore.currentDish = { ...recipesStore.currentDish }
     }
     
-    // Check and restore snapshots immediately
-    if (recipesStore.snapshots.length === 0 && snapshotsBefore.length > 0) {
-      console.error('Snapshots were cleared! Restoring immediately.')
-      recipesStore.snapshots = [...snapshotsBefore]
+    // Check and restore recipes immediately
+    if (recipesStore.recipes.length === 0 && recipesBefore.length > 0) {
+      console.error('Recipes were cleared! Restoring immediately.')
+      recipesStore.recipes = [...recipesBefore]
     }
     
     // Wait for any reactivity updates
     await nextTick()
     
     // Check again after nextTick - restore if still cleared
-    if (recipesStore.snapshots.length === 0 && snapshotsBefore.length > 0) {
-      console.error('Snapshots still cleared after nextTick! Restoring again.')
-      recipesStore.snapshots = [...snapshotsBefore]
+    if (recipesStore.recipes.length === 0 && recipesBefore.length > 0) {
+      console.error('Recipes still cleared after nextTick! Restoring again.')
+      recipesStore.recipes = [...recipesBefore]
     }
     
-    // Ensure we stay on the same snapshot
-    if (!isNewSnapshot.value && currentSnapshotIdBefore) {
-      const restoredIndex = sortedSnapshots.value.findIndex(s => s._id === currentSnapshotIdBefore)
+    // Ensure we stay on the same recipe
+    if (!isNewRecipe.value && currentRecipeIdBefore) {
+      const restoredIndex = sortedRecipes.value.findIndex(r => r._id === currentRecipeIdBefore)
       if (restoredIndex !== -1) {
-        currentSnapshotIndex.value = restoredIndex
-        isNewSnapshot.value = false
+        currentRecipeIndex.value = restoredIndex
+        isNewRecipe.value = false
       }
     }
     
   } catch (err) {
-    console.error('Error setting default snapshot:', err)
-    error.value = err.message || 'Failed to set default snapshot'
+    console.error('Error setting default recipe:', err)
+    error.value = err.message || 'Failed to set default recipe'
     
-    // Always restore snapshots on error
-    if (recipesStore.snapshots.length === 0 && snapshotsBefore.length > 0) {
-      recipesStore.snapshots = [...snapshotsBefore]
+    // Always restore recipes on error
+    if (recipesStore.recipes.length === 0 && recipesBefore.length > 0) {
+      recipesStore.recipes = [...recipesBefore]
     }
   }
 }
@@ -950,7 +1018,7 @@ function formatMarkdown(text) {
 }
 
 function getActiveTabColor() {
-  if (isNewSnapshot.value) {
+  if (isNewRecipe.value) {
     return 'rgba(167, 123, 91, 0.3)' // var(--color-medium-brown) with opacity
   }
   return 'rgba(217, 154, 108, 0.3)' // var(--color-light-brown) with opacity
@@ -959,21 +1027,21 @@ function getActiveTabColor() {
 async function goToTableOfContents() {
   let bookId = currentBookId.value || sessionStorage.getItem('pendingRecipeBook')
   
-  // If we don't have a book ID, try to find which book contains this recipe
-  if (!bookId && recipe.value?._id) {
+  // If we don't have a book ID, try to find which book contains this dish
+  if (!bookId && dish.value?._id) {
     try {
-      // Fetch all books and find which one contains this recipe
+      // Fetch all books and find which one contains this dish
       await recipeBooksStore.fetchBooks()
-      const bookWithRecipe = recipeBooksStore.books.find(book => 
-        book.recipes && book.recipes.includes(recipe.value._id)
+      const bookWithDish = recipeBooksStore.books.find(book => 
+        book.dishes && book.dishes.includes(dish.value._id)
       )
-      if (bookWithRecipe) {
-        bookId = bookWithRecipe._id
+      if (bookWithDish) {
+        bookId = bookWithDish._id
         // Cache it for future use
         currentBookId.value = bookId
       }
     } catch (err) {
-      console.warn('Failed to find book for recipe:', err)
+      console.warn('Failed to find book for dish:', err)
     }
   }
   
@@ -989,21 +1057,21 @@ async function goToTableOfContents() {
 async function goToRankings() {
   let bookId = currentBookId.value || sessionStorage.getItem('pendingRecipeBook')
   
-  // If we don't have a book ID, try to find which book contains this recipe
-  if (!bookId && recipe.value?._id) {
+  // If we don't have a book ID, try to find which book contains this dish
+  if (!bookId && dish.value?._id) {
     try {
-      // Fetch all books and find which one contains this recipe
+      // Fetch all books and find which one contains this dish
       await recipeBooksStore.fetchBooks()
-      const bookWithRecipe = recipeBooksStore.books.find(book => 
-        book.recipes && book.recipes.includes(recipe.value._id)
+      const bookWithDish = recipeBooksStore.books.find(book => 
+        book.dishes && book.dishes.includes(dish.value._id)
       )
-      if (bookWithRecipe) {
-        bookId = bookWithRecipe._id
+      if (bookWithDish) {
+        bookId = bookWithDish._id
         // Cache it for future use
         currentBookId.value = bookId
       }
     } catch (err) {
-      console.warn('Failed to find book for recipe:', err)
+      console.warn('Failed to find book for dish:', err)
     }
   }
   
@@ -1017,40 +1085,40 @@ async function goToRankings() {
 }
 
 // Watch snapshots to restore if cleared and update backup
-watch(() => recipesStore.snapshots, (newSnapshots, oldSnapshots) => {
-  // CRITICAL: If snapshots were cleared unexpectedly, restore from backup immediately
-  if (oldSnapshots && oldSnapshots.length > 0 && newSnapshots.length === 0 && snapshotsBackup.value.length > 0) {
-    console.error('Snapshots were cleared unexpectedly - restoring from backup IMMEDIATELY', {
-      oldCount: oldSnapshots.length,
-      newCount: newSnapshots.length,
-      backupCount: snapshotsBackup.value.length
+watch(() => recipesStore.recipes, (newRecipes, oldRecipes) => {
+  // CRITICAL: If recipes were cleared unexpectedly, restore from backup immediately
+  if (oldRecipes && oldRecipes.length > 0 && newRecipes.length === 0 && recipesBackup.value.length > 0) {
+    console.error('Recipes were cleared unexpectedly - restoring from backup IMMEDIATELY', {
+      oldCount: oldRecipes.length,
+      newCount: newRecipes.length,
+      backupCount: recipesBackup.value.length
     })
     // Use nextTick to ensure this runs after any clearing operation
     nextTick(() => {
-      if (recipesStore.snapshots.length === 0 && snapshotsBackup.value.length > 0) {
-        recipesStore.snapshots = [...snapshotsBackup.value]
+      if (recipesStore.recipes.length === 0 && recipesBackup.value.length > 0) {
+        recipesStore.recipes = [...recipesBackup.value]
       }
     })
     return
   }
   
-  // Update backup when snapshots change (but aren't being cleared)
-  if (newSnapshots.length > 0) {
-    snapshotsBackup.value = [...newSnapshots]
+  // Update backup when recipes change (but aren't being cleared)
+  if (newRecipes.length > 0) {
+    recipesBackup.value = [...newRecipes]
   }
   
-  if (sortedSnapshots.value.length > 0 && !isNewSnapshot.value && currentSnapshotIndex.value >= 0) {
-    loadSnapshotData(sortedSnapshots.value[currentSnapshotIndex.value])
+  if (sortedRecipes.value.length > 0 && !isNewRecipe.value && currentRecipeIndex.value >= 0) {
+    loadRecipeData(sortedRecipes.value[currentRecipeIndex.value])
   }
 }, { deep: true, immediate: true })
 
-// Watch for route changes to reload recipe
+// Watch for route changes to reload dish
 watch(() => route.params.id, () => {
-  loadRecipe()
+  loadDish()
 })
 
 onMounted(() => {
-  loadRecipe()
+  loadDish()
 })
 </script>
 
@@ -1283,14 +1351,14 @@ onMounted(() => {
   padding-bottom: 0.5rem;
 }
 
-.snapshot-header-row {
+.recipe-header-row {
   display: flex;
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
 }
 
-.snapshot-name {
+.recipe-name {
   font-size: 1.2rem;
   color: var(--color-medium-brown);
   font-weight: normal;
@@ -1351,7 +1419,7 @@ onMounted(() => {
   border-bottom-color: var(--color-dark-brown);
 }
 
-.snapshot-name-input {
+.recipe-name-input {
   font-size: 1.2rem;
   color: var(--color-medium-brown);
   font-weight: normal;
@@ -1365,7 +1433,7 @@ onMounted(() => {
   margin-top: 0.5rem;
 }
 
-.snapshot-name-input:focus {
+.recipe-name-input:focus {
   outline: none;
   border-color: var(--color-dark-brown);
 }
@@ -1397,11 +1465,28 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .edit-indicator-icon {
   width: 16px;
   height: 16px;
+}
+
+.upload-image-btn {
+  padding: 0.5rem 1rem;
+  background-color: var(--color-medium-brown);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+}
+
+.upload-image-btn:hover {
+  background-color: var(--color-dark-brown);
 }
 
 .recipe-image {
@@ -1490,7 +1575,7 @@ onMounted(() => {
   background-color: rgba(217, 154, 108, 0.4); /* var(--color-light-brown) with opacity - more pale/orange */
 }
 
-.snapshot-tabs-container {
+.recipe-tabs-container {
   position: relative;
   margin-bottom: 0;
   overflow-x: auto;
@@ -1504,7 +1589,7 @@ onMounted(() => {
   max-height: 60px; /* Fixed height to prevent vertical expansion */
 }
 
-.snapshot-tabs {
+.recipe-tabs {
   display: flex;
   gap: 0;
   min-width: min-content;
@@ -1516,7 +1601,7 @@ onMounted(() => {
   /* Order: New button (leftmost), newest snapshot, older snapshots (rightmost) */
 }
 
-.snapshot-tab {
+.recipe-tab {
   padding: 0.75rem 1.5rem;
   background-color: var(--color-light-brown); /* Darker brown for tabs */
   border: 2px solid var(--color-medium-brown);
@@ -1540,7 +1625,7 @@ onMounted(() => {
   font-weight: 500;
 }
 
-.snapshot-tab:hover {
+.recipe-tab:hover {
   background-color: var(--color-gold);
   box-shadow: 
     0 -4px 8px rgba(0, 0, 0, 0.15),
@@ -1550,7 +1635,7 @@ onMounted(() => {
   min-height: 48px;
 }
 
-.snapshot-tab.active {
+.recipe-tab.active {
   background-color: var(--color-gold); /* Lighter for active tab */
   border-bottom: 2px solid var(--color-medium-brown);
   font-weight: 600;
@@ -1566,7 +1651,7 @@ onMounted(() => {
   min-height: 48px;
 }
 
-.snapshot-tab.default {
+.recipe-tab.default {
   border-color: var(--color-gold);
   border-width: 2px;
   box-shadow: 

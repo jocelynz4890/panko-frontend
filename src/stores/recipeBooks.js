@@ -12,13 +12,13 @@ export const useRecipeBooksStore = defineStore('recipeBooks', () => {
   const authStore = useAuthStore()
 
   async function fetchBooks() {
-    if (!authStore.user) return
+    if (!authStore.token) return
     
     loading.value = true
     error.value = null
     try {
-      const response = await recipeBookAPI.getBooks(authStore.user)
-      books.value = response.data
+      const response = await recipeBookAPI.getBooks(null)
+      books.value = response.data.books || response.data
     } catch (err) {
       error.value = err.message || 'Failed to fetch recipe books'
     } finally {
@@ -31,7 +31,8 @@ export const useRecipeBooksStore = defineStore('recipeBooks', () => {
     error.value = null
     try {
       const response = await recipeBookAPI.getBook(bookId)
-      currentBook.value = response.data[0]
+      const books = response.data.books || response.data
+      currentBook.value = Array.isArray(books) ? books[0] : books
       return currentBook.value
     } catch (err) {
       error.value = err.message || 'Failed to fetch recipe book'
@@ -42,12 +43,12 @@ export const useRecipeBooksStore = defineStore('recipeBooks', () => {
   }
 
   async function createBook(name, coverIndex) {
-    if (!authStore.user) return null
+    if (!authStore.token) return null
     
     loading.value = true
     error.value = null
     try {
-      const response = await recipeBookAPI.createRecipeBook(authStore.user, name, coverIndex)
+      const response = await recipeBookAPI.createRecipeBook(null, name, coverIndex)
       await fetchBooks()
       return response.data.book
     } catch (err) {
@@ -72,17 +73,17 @@ export const useRecipeBooksStore = defineStore('recipeBooks', () => {
     }
   }
 
-  async function addRecipeToBook(recipeId, bookId) {
+  async function addDishToBook(dishId, bookId) {
     loading.value = true
     error.value = null
     try {
-      await recipeBookAPI.addRecipeToBook(recipeId, bookId)
+      await recipeBookAPI.addDishToBook(dishId, bookId)
       // Reload the current book if it's the one we're modifying
       if (currentBook.value && currentBook.value._id === bookId) {
         await fetchBook(bookId)
       }
     } catch (err) {
-      error.value = err.message || 'Failed to add recipe to book'
+      error.value = err.message || 'Failed to add dish to book'
       throw err
     } finally {
       loading.value = false
@@ -98,7 +99,7 @@ export const useRecipeBooksStore = defineStore('recipeBooks', () => {
     fetchBook,
     createBook,
     deleteBook,
-    addRecipeToBook
+    addDishToBook
   }
 })
 

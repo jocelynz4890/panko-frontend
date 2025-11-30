@@ -1,69 +1,119 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { recipeAPI, snapshotAPI } from '../api/api'
+import { dishesAPI, recipeAPI } from '../api/api'
 import { useAuthStore } from './auth'
 
 export const useRecipesStore = defineStore('recipes', () => {
-  const currentRecipe = ref(null)
-  const snapshots = ref([])
+  const currentDish = ref(null)
+  const recipes = ref([])
   const loading = ref(false)
   const error = ref(null)
 
   const authStore = useAuthStore()
 
-  async function fetchRecipe(recipeId) {
+  async function fetchDish(dishId) {
     loading.value = true
     error.value = null
     try {
-      const response = await recipeAPI.getRecipe(recipeId)
-      currentRecipe.value = response.data[0]
+      const response = await dishesAPI.getDish(dishId)
+      const dishes = response.data.dishes || response.data
+      currentDish.value = Array.isArray(dishes) ? dishes[0] : dishes
       
-      // Fetch snapshots for this recipe
-      // Always clear snapshots first, then load if recipe has snapshots
-      const hasSnapshotsInRecipe = currentRecipe.value?.snapshots?.length > 0
+      // Fetch recipes for this dish
+      // Always clear recipes first, then load if dish has recipes
+      const hasRecipesInDish = currentDish.value?.recipes?.length > 0
       
-      if (hasSnapshotsInRecipe) {
-        await fetchSnapshots(recipeId)
+      if (hasRecipesInDish) {
+        await fetchRecipes(dishId)
       } else {
-        // Clear snapshots if recipe has no snapshots
-        snapshots.value = []
+        // Clear recipes if dish has no recipes
+        recipes.value = []
       }
       
-      return currentRecipe.value
+      return currentDish.value
     } catch (err) {
-      error.value = err.message || 'Failed to fetch recipe'
+      error.value = err.message || 'Failed to fetch dish'
       throw err
     } finally {
       loading.value = false
     }
   }
 
-  async function fetchSnapshots(recipeId) {
+  async function fetchRecipes(dishId) {
     loading.value = true
     error.value = null
     try {
-      const response = await snapshotAPI.getSnapshots(recipeId)
-      snapshots.value = response.data.sort((a, b) => {
+      const response = await recipeAPI.getRecipes(dishId)
+      const recipesData = response.data.recipes || response.data
+      recipes.value = (Array.isArray(recipesData) ? recipesData : []).sort((a, b) => {
         // Sort by date chronologically
         return new Date(a.date) - new Date(b.date)
       })
-      return snapshots.value
+      return recipes.value
     } catch (err) {
-      error.value = err.message || 'Failed to fetch snapshots'
+      error.value = err.message || 'Failed to fetch recipes'
       throw err
     } finally {
       loading.value = false
     }
   }
 
-  async function createRecipe(name, description) {
-    if (!authStore.user) return null
+  async function createDish(name, description) {
+    if (!authStore.token) return null
     
     loading.value = true
     error.value = null
     try {
-      const response = await recipeAPI.createRecipe(authStore.user, name, description)
-      return response.data.recipe
+      const response = await dishesAPI.createDish(null, name, description)
+      return response.data.dish
+    } catch (err) {
+      error.value = err.message || 'Failed to create dish'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function updateDish(dishId, newName, description) {
+    loading.value = true
+    error.value = null
+    try {
+      await dishesAPI.editDishName(dishId, newName, description)
+      await fetchDish(dishId)
+    } catch (err) {
+      error.value = err.message || 'Failed to update dish'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function createRecipe(recipeData) {
+    if (!authStore.token) return null
+    
+    loading.value = true
+    error.value = null
+    try {
+      const response = await recipeAPI.createRecipe(
+        null,
+        recipeData.ingredientsList || '',
+        recipeData.subname || '',
+        recipeData.pictures || [],
+        recipeData.date || new Date().toISOString().split('T')[0],
+        recipeData.instructions || '',
+        recipeData.note || '',
+        recipeData.ranking || 1,
+        recipeData.dish
+      )
+      const recipeId = response.data.recipe
+      
+      // Add recipe to dish if not already added
+      if (recipeData.dish) {
+        await dishesAPI.addRecipe(recipeId, recipeData.dish)
+      }
+      
+      await fetchRecipes(recipeData.dish)
+      return recipeId
     } catch (err) {
       error.value = err.message || 'Failed to create recipe'
       throw err
@@ -72,12 +122,23 @@ export const useRecipesStore = defineStore('recipes', () => {
     }
   }
 
-  async function updateRecipe(recipeId, newName, description) {
+  async function updateRecipe(recipeId, recipeData) {
     loading.value = true
     error.value = null
     try {
-      await recipeAPI.editRecipeName(recipeId, newName, description)
-      await fetchRecipe(recipeId)
+      await recipeAPI.editRecipe(
+        recipeId,
+        recipeData.ingredientsList || '',
+        recipeData.subname || '',
+        recipeData.pictures || [],
+        recipeData.date || new Date().toISOString().split('T')[0],
+        recipeData.instructions || '',
+        recipeData.note || '',
+        recipeData.ranking || 1
+      )
+      if (recipeData.dish) {
+        await fetchRecipes(recipeData.dish)
+      }
     } catch (err) {
       error.value = err.message || 'Failed to update recipe'
       throw err
@@ -86,79 +147,36 @@ export const useRecipesStore = defineStore('recipes', () => {
     }
   }
 
-  async function createSnapshot(snapshotData) {
-    if (!authStore.user) return null
+  async function setDefaultRecipe(recipeId, dishId) {
+    loading.value = true
+    error.value = null
+    try {
+      await dishesAPI.setDefaultRecipe(recipeId, dishId)
+      // Update the defaultRecipe field locally without full reload
+      // Only update if currentDish exists and matches - be careful not to trigger reloads
+      if (currentDish.value && currentDish.value._id === dishId) {
+        // Use Object.assign to update the field without replacing the object
+        Object.assign(currentDish.value, { defaultRecipe: recipeId })
+      }
+      // Don't call fetchDish - just update the field to avoid clearing recipes/view
+    } catch (err) {
+      error.value = err.message || 'Failed to set default recipe'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function uploadRecipeImage(recipeId, file) {
+    if (!authStore.token) return null
     
     loading.value = true
     error.value = null
     try {
-      const response = await snapshotAPI.createSnapshot(
-        authStore.user,
-        snapshotData.ingredientsList || '',
-        snapshotData.subname || '',
-        snapshotData.pictures || [],
-        snapshotData.date || new Date().toISOString().split('T')[0],
-        snapshotData.instructions || '',
-        snapshotData.note || '',
-        snapshotData.ranking || 1,
-        snapshotData.recipe
-      )
-      const snapshotId = response.data.snapshot
-      
-      // Add snapshot to recipe if not already added
-      if (snapshotData.recipe) {
-        await recipeAPI.addSnapshot(snapshotId, snapshotData.recipe)
-      }
-      
-      await fetchSnapshots(snapshotData.recipe)
-      return snapshotId
+      const response = await recipeAPI.uploadImage(recipeId, file, null)
+      return response.data
     } catch (err) {
-      error.value = err.message || 'Failed to create snapshot'
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
-
-  async function updateSnapshot(snapshotId, snapshotData) {
-    loading.value = true
-    error.value = null
-    try {
-      await snapshotAPI.editSnapshot(
-        snapshotId,
-        snapshotData.ingredientsList || '',
-        snapshotData.subname || '',
-        snapshotData.pictures || [],
-        snapshotData.date || new Date().toISOString().split('T')[0],
-        snapshotData.instructions || '',
-        snapshotData.note || '',
-        snapshotData.ranking || 1
-      )
-      if (snapshotData.recipe) {
-        await fetchSnapshots(snapshotData.recipe)
-      }
-    } catch (err) {
-      error.value = err.message || 'Failed to update snapshot'
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
-
-  async function setDefaultSnapshot(snapshotId, recipeId) {
-    loading.value = true
-    error.value = null
-    try {
-      await recipeAPI.setDefaultSnapshot(snapshotId, recipeId)
-      // Update the defaultSnapshot field locally without full reload
-      // Only update if currentRecipe exists and matches - be careful not to trigger reloads
-      if (currentRecipe.value && currentRecipe.value._id === recipeId) {
-        // Use Object.assign to update the field without replacing the object
-        Object.assign(currentRecipe.value, { defaultSnapshot: snapshotId })
-      }
-      // Don't call fetchRecipe - just update the field to avoid clearing snapshots/view
-    } catch (err) {
-      error.value = err.message || 'Failed to set default snapshot'
+      error.value = err.message || 'Failed to upload image'
       throw err
     } finally {
       loading.value = false
@@ -166,17 +184,17 @@ export const useRecipesStore = defineStore('recipes', () => {
   }
 
   return {
-    currentRecipe,
-    snapshots,
+    currentDish,
+    recipes,
     loading,
     error,
-    fetchRecipe,
-    fetchSnapshots,
+    fetchDish,
+    fetchRecipes,
+    createDish,
+    updateDish,
     createRecipe,
     updateRecipe,
-    createSnapshot,
-    updateSnapshot,
-    setDefaultSnapshot
+    setDefaultRecipe,
+    uploadRecipeImage
   }
 })
-

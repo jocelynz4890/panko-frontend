@@ -9,6 +9,11 @@ const api = axios.create({
   timeout: 30000 // 30 seconds timeout (backend default is 10s, but allow more time)
 })
 
+// Helper function to get token from localStorage
+function getToken() {
+  return localStorage.getItem('token')
+}
+
 // Request interceptor to add auth token if available
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
@@ -63,68 +68,68 @@ export const authAPI = {
 // RecipeBook API
 export const recipeBookAPI = {
   createRecipeBook: (user, name, coverIndex) => 
-    api.post('/RecipeBook/createRecipeBook', { user, name, coverIndex }),
+    api.post('/RecipeBook/createRecipeBook', { token: getToken(), name, coverIndex }),
   
   editRecipeBookName: (book, newName) => 
-    api.post('/RecipeBook/editRecipeBookName', { book, newName }),
+    api.post('/RecipeBook/editRecipeBookName', { token: getToken(), book, newName }),
   
   deleteRecipeBook: (book) => 
-    api.post('/RecipeBook/deleteRecipeBook', { book }),
+    api.post('/RecipeBook/deleteRecipeBook', { token: getToken(), book }),
   
   getBooks: (user) => 
-    api.post('/RecipeBook/_getBooks', { user }),
+    api.post('/RecipeBook/_getBooks', { token: getToken() }),
   
   getBook: (book) => 
     api.post('/RecipeBook/_getBook', { book }),
   
-  addRecipeToBook: (recipe, book) => 
-    api.post('/RecipeBook/addRecipeToBook', { recipe, book }),
+  addDishToBook: (dish, book) => 
+    api.post('/RecipeBook/addDishToBook', { token: getToken(), dish, book }),
   
-  removeRecipeFromBook: (recipe, book) => 
-    api.post('/RecipeBook/removeRecipeFromBook', { recipe, book })
+  removeDishFromBook: (dish, book) => 
+    api.post('/RecipeBook/removeDishFromBook', { token: getToken(), dish, book })
 }
 
 // Dishes API (formerly Recipes concept)
 export const dishesAPI = {
   createDish: (user, name, description) => 
-    api.post('/Dishes/createDish', { user, name, description }),
+    api.post('/Dishes/createDish', { token: getToken(), name, description }),
   
   editDishName: (dish, newName, description) => 
-    api.post('/Dishes/editDishName', { dish, newName, description }),
+    api.post('/Dishes/editDishName', { token: getToken(), dish, newName, description }),
   
   deleteDish: (dish) => 
-    api.post('/Dishes/deleteDish', { dish }),
+    api.post('/Dishes/deleteDish', { token: getToken(), dish }),
   
   getDish: (dish) => 
     api.post('/Dishes/_getDish', { dish }),
   
   addRecipe: (recipe, dish) => 
-    api.post('/Dishes/addRecipe', { recipe, dish }),
+    api.post('/Dishes/addRecipe', { token: getToken(), recipe, dish }),
   
   removeRecipe: (recipe, dish) => 
-    api.post('/Dishes/removeRecipe', { recipe, dish }),
+    api.post('/Dishes/removeRecipe', { token: getToken(), recipe, dish }),
   
   setDefaultRecipe: (recipe, dish) => 
-    api.post('/Dishes/setDefaultRecipe', { recipe, dish })
+    api.post('/Dishes/setDefaultRecipe', { token: getToken(), recipe, dish })
 }
 
 // Recipe API (formerly Snapshot concept)
 export const recipeAPI = {
   createRecipe: (user, ingredientsList, subname, pictures, date, instructions, note, ranking, dish) => 
     api.post('/Recipe/createRecipe', { 
-      user, ingredientsList, subname, pictures, date, instructions, note, ranking, dish 
+      token: getToken(), ingredientsList, subname, pictures, date, instructions, note, ranking, dish 
     }),
   
   editRecipe: (recipe, ingredientsList, subname, pictures, date, instructions, note, ranking) => 
     api.post('/Recipe/editRecipe', { 
-      recipe, ingredientsList, subname, pictures, date, instructions, note, ranking 
+      token: getToken(), recipe, ingredientsList, subname, pictures, date, instructions, note, ranking 
     }),
   
   deleteRecipe: (recipe) => 
-    api.post('/Recipe/deleteRecipe', { recipe }),
+    api.post('/Recipe/deleteRecipe', { token: getToken(), recipe }),
   
   deleteAllRecipesForDish: (dish) => 
-    api.post('/Recipe/deleteAllRecipesForDish', { dish }),
+    api.post('/Recipe/deleteAllRecipesForDish', { token: getToken(), dish }),
   
   getRecipes: (dish) => 
     api.post('/Recipe/_getRecipes', { dish }),
@@ -133,6 +138,8 @@ export const recipeAPI = {
     const formData = new FormData()
     formData.append('recipe', recipeId)
     formData.append('file', file)
+    const token = getToken()
+    if (token) formData.append('token', token)
     if (user) formData.append('user', user)
     return api.post('/uploads/recipe-image', formData, {
       headers: {
@@ -145,16 +152,16 @@ export const recipeAPI = {
 // Calendar API
 export const calendarAPI = {
   assignRecipeToDate: (user, recipe, date) => 
-    api.post('/Calendar/assignRecipeToDate', { user, recipe, date }),
+    api.post('/Calendar/assignRecipeToDate', { token: getToken(), recipe, date }),
   
   deleteScheduledRecipe: (scheduledRecipe) => 
-    api.post('/Calendar/deleteScheduledRecipe', { scheduledRecipe }),
+    api.post('/Calendar/deleteScheduledRecipe', { token: getToken(), scheduledRecipe }),
   
   deleteAllScheduledRecipesWithRecipe: (recipe) => 
-    api.post('/Calendar/deleteAllScheduledRecipesWithRecipe', { recipe }),
+    api.post('/Calendar/deleteAllScheduledRecipesWithRecipe', { token: getToken(), recipe }),
   
   getScheduledRecipes: (user) => 
-    api.post('/Calendar/_getScheduledRecipes', { user })
+    api.post('/Calendar/_getScheduledRecipes', { token: getToken() })
 }
 
 export default api
