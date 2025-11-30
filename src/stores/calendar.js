@@ -80,6 +80,8 @@ export const useCalendarStore = defineStore('calendar', () => {
   }
 
   function clearPendingUpdates() {
+    pendingUpdates.value.length = 0
+    // Force reactivity update
     pendingUpdates.value = []
   }
 
@@ -89,23 +91,82 @@ export const useCalendarStore = defineStore('calendar', () => {
     loading.value = true
     error.value = null
     try {
-      // Process all pending updates without fetching after each one
+      // Separate updates by type
+      const adds = []
+      const deletes = []
+      const moves = []
+      
       for (const update of pendingUpdates.value) {
         if (update.type === 'add') {
-          await scheduleRecipe(update.recipe, update.date, true)
+          adds.push(update)
         } else if (update.type === 'delete') {
-          await deleteScheduledRecipe(update.scheduledRecipe, true)
+          deletes.push(update)
         } else if (update.type === 'move') {
-          // Delete old and create new
-          await deleteScheduledRecipe(update.oldScheduledRecipe, true)
-          await scheduleRecipe(update.recipe, update.newDate, true)
+          moves.push(update)
         }
       }
-      clearPendingUpdates()
-      // Only fetch once at the end
-      await fetchScheduledRecipes()
+      
+      // Process in batches to avoid overwhelming the backend
+      const BATCH_SIZE = 5
+      
+      // Process deletes in batches
+      for (let i = 0; i < deletes.length; i += BATCH_SIZE) {
+        const batch = deletes.slice(i, i + BATCH_SIZE)
+        await Promise.all(
+          batch.map(update => 
+            deleteScheduledRecipe(update.scheduledRecipe, true).catch(err => {
+              console.error('Failed to delete scheduled recipe:', err)
+              throw err
+            })
+          )
+        )
+      }
+      
+      // Process adds in batches
+      for (let i = 0; i < adds.length; i += BATCH_SIZE) {
+        const batch = adds.slice(i, i + BATCH_SIZE)
+        await Promise.all(
+          batch.map(update => 
+            scheduleRecipe(update.recipe, update.date, true).catch(err => {
+              console.error('Failed to schedule recipe:', err)
+              throw err
+            })
+          )
+        )
+      }
+      
+      // Process moves in batches (each move is delete + add)
+      for (let i = 0; i < moves.length; i += BATCH_SIZE) {
+        const batch = moves.slice(i, i + BATCH_SIZE)
+        await Promise.all(
+          batch.map(update => 
+            Promise.all([
+              deleteScheduledRecipe(update.oldScheduledRecipe, true),
+              scheduleRecipe(update.recipe, update.newDate, true)
+            ]).catch(err => {
+              console.error('Failed to move scheduled recipe:', err)
+              throw err
+            })
+          )
+        )
+      }
+      
+      // Clear pending updates immediately after successful operations
+      // This updates the UI right away - do this BEFORE fetch to ensure UI updates
+      pendingUpdates.value = []
+      
+      // Try to fetch updated data, but don't fail if it times out
+      // The operations already succeeded, so we can refresh the UI later
+      try {
+        await fetchScheduledRecipes()
+      } catch (fetchErr) {
+        // Log but don't throw - operations succeeded, fetch is just for refresh
+        console.warn('Failed to refresh scheduled recipes after save (operations succeeded):', fetchErr)
+        // Don't set error.value here - operations succeeded
+      }
     } catch (err) {
       error.value = err.message || 'Failed to submit updates'
+      // Don't clear pending updates on error - let user retry
       throw err
     } finally {
       loading.value = false

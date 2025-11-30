@@ -590,9 +590,20 @@ async function submitUpdates() {
   
   try {
     await calendarStore.submitPendingUpdates()
-    await loadData()
+    // Try to reload data, but don't fail if it times out
+    // The save already succeeded, so pending updates are cleared
+    try {
+      await loadData()
+    } catch (loadErr) {
+      console.warn('Failed to reload calendar data after save (save succeeded):', loadErr)
+      // Don't show error - the save worked, just refresh failed
+    }
+    // Force reactivity update to ensure UI reflects cleared pending updates
+    await nextTick()
   } catch (err) {
+    // Only show error if the actual save operations failed
     error.value = err.message || 'Failed to save changes'
+    console.error('Failed to submit updates:', err)
   } finally {
     submitting.value = false
   }
