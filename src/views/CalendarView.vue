@@ -1,6 +1,6 @@
 <template>
   <div class="calendar-container">
-    <h1 class="page-title">Meal Planning Calendar</h1>
+    <h1 class="page-title">Cooking Scheduling Calendar</h1>
     
     <div v-if="loading" class="loading">Loading...</div>
     <div v-if="error" class="error">{{ error }}</div>
@@ -631,8 +631,10 @@ onActivated(() => {
 }
 
 .page-title {
-  color: var(--color-dark-brown);
+  border-bottom: 2px solid var(--color-dark-brown);
+  padding-bottom: 1rem;
   margin-bottom: 2rem;
+  color: var(--color-dark-brown);
   text-align: center;
   font-size: 2rem;
 }
@@ -699,6 +701,7 @@ onActivated(() => {
   grid-template-columns: repeat(7, 1fr);
   gap: 1px;
   background-color: var(--color-light-brown);
+  overflow: visible; /* Allow hover effects to show */
 }
 
 .calendar-day {
@@ -708,6 +711,7 @@ onActivated(() => {
   display: flex;
   flex-direction: column;
   position: relative;
+  overflow: visible; /* Allow hover scale to show */
 }
 
 .calendar-day.other-month {
@@ -733,6 +737,7 @@ onActivated(() => {
   flex-direction: column;
   gap: 0.25rem;
   overflow-y: auto;
+  overflow-x: visible;
 }
 
 .scheduled-item {
@@ -744,11 +749,11 @@ onActivated(() => {
   cursor: move;
   transition: all 0.2s;
   word-break: break-word;
+  position: relative;
 }
 
 .scheduled-item:hover {
   background-color: var(--color-dark-brown);
-  transform: scale(1.02);
 }
 
 .scheduled-item:active {
@@ -855,7 +860,6 @@ onActivated(() => {
 .snapshot-option:hover {
   background-color: var(--color-gold);
   border-color: var(--color-medium-brown);
-  transform: translateX(-2px);
 }
 
 .snapshot-option:active {

@@ -23,21 +23,9 @@ body {
 
 /* Move filter to #app instead of body to avoid breaking fixed positioning */
 #app {
-  /* Crafty paper background */
-  background: 
-    repeating-linear-gradient(
-      0deg,
-      rgba(139, 115, 85, 0.02) 0px,
-      transparent 1px,
-      transparent 2px,
-      rgba(139, 115, 85, 0.02) 3px
-    ),
-    radial-gradient(circle at 50% 50%, rgba(250, 235, 215, 0.2) 0%, transparent 70%),
-    linear-gradient(135deg, var(--color-cream) 0%, #fef9e7 50%, var(--color-cream) 100%);
-  background-size: 100% 4px, 100% 100%, 100% 100%;
+  /* Flat background */
+  background-color: var(--color-cream);
   min-height: 100vh;
-  /* Subtle grain */
-  filter: contrast(1.02) brightness(0.99);
 }
 
 button {
