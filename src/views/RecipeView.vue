@@ -297,6 +297,18 @@ async function loadRecipe() {
     } catch (err) {
       console.warn('Failed to load book:', err)
     }
+  } else {
+    // If we don't have a book ID yet, try to find it after loading the recipe
+    // This will be done after the recipe is loaded (see below)
+  }
+  
+  // Check if this is a temporary ID (starts with "temp-")
+  const isTempId = recipeId && recipeId.startsWith('temp-')
+  
+  // Clear snapshots for new recipes to ensure blank slate
+  if (isTempId) {
+    recipesStore.snapshots = []
+    snapshotsBackup.value = []
   }
   
   // Show empty state immediately
@@ -317,9 +329,6 @@ async function loadRecipe() {
   loading.value = true
   error.value = ''
   
-  // Check if this is a temporary ID (starts with "temp-")
-  const isTempId = recipeId && recipeId.startsWith('temp-')
-  
   try {
     if (!isTempId) {
       try {
@@ -329,6 +338,22 @@ async function loadRecipe() {
           // Create a separate copy to avoid reactivity issues
           recipe.value = { ...fetchedRecipe }
           editableRecipeName.value = fetchedRecipe.name
+          
+          // If we don't have a book ID yet, try to find which book contains this recipe
+          if (!currentBookId.value) {
+            try {
+              await recipeBooksStore.fetchBooks()
+              const bookWithRecipe = recipeBooksStore.books.find(book => 
+                book.recipes && book.recipes.includes(fetchedRecipe._id)
+              )
+              if (bookWithRecipe) {
+                currentBookId.value = bookWithRecipe._id
+                currentBookName.value = bookWithRecipe.name
+              }
+            } catch (bookErr) {
+              console.warn('Failed to find book for recipe:', bookErr)
+            }
+          }
         }
       } catch (fetchErr) {
         // If fetch fails, recipe might not exist yet - keep empty state
@@ -336,13 +361,17 @@ async function loadRecipe() {
       }
     }
     
-      // Load snapshots if recipe exists and has snapshots
-      if (recipe.value && recipe.value.snapshots && recipe.value.snapshots.length > 0) {
+      // Load snapshots if recipe exists and has snapshots (but not for temp IDs)
+      if (!isTempId && recipe.value && recipe.value.snapshots && recipe.value.snapshots.length > 0) {
         await recipesStore.fetchSnapshots(recipe.value._id)
         // Update backup after loading
         if (recipesStore.snapshots.length > 0) {
           snapshotsBackup.value = [...recipesStore.snapshots]
         }
+      } else if (isTempId) {
+        // Ensure snapshots are cleared for new recipes
+        recipesStore.snapshots = []
+        snapshotsBackup.value = []
       }
       
       if (recipe.value && sortedSnapshots.value.length > 0) {
@@ -907,25 +936,63 @@ function getActiveTabColor() {
   return 'rgba(217, 154, 108, 0.3)' // var(--color-light-brown) with opacity
 }
 
-function goToTableOfContents() {
-  const bookId = currentBookId.value || sessionStorage.getItem('pendingRecipeBook')
+async function goToTableOfContents() {
+  let bookId = currentBookId.value || sessionStorage.getItem('pendingRecipeBook')
+  
+  // If we don't have a book ID, try to find which book contains this recipe
+  if (!bookId && recipe.value?._id) {
+    try {
+      // Fetch all books and find which one contains this recipe
+      await recipeBooksStore.fetchBooks()
+      const bookWithRecipe = recipeBooksStore.books.find(book => 
+        book.recipes && book.recipes.includes(recipe.value._id)
+      )
+      if (bookWithRecipe) {
+        bookId = bookWithRecipe._id
+        // Cache it for future use
+        currentBookId.value = bookId
+      }
+    } catch (err) {
+      console.warn('Failed to find book for recipe:', err)
+    }
+  }
+  
   if (bookId) {
     // Force reload by adding timestamp to ensure fresh data
     router.push(`/book/${bookId}?refresh=${Date.now()}`)
   } else {
-    // Navigate to home if no book ID
+    // Navigate to home if no book ID found
     router.push('/')
   }
 }
 
-function goToRankings() {
-  const bookId = currentBookId.value || sessionStorage.getItem('pendingRecipeBook')
+async function goToRankings() {
+  let bookId = currentBookId.value || sessionStorage.getItem('pendingRecipeBook')
+  
+  // If we don't have a book ID, try to find which book contains this recipe
+  if (!bookId && recipe.value?._id) {
+    try {
+      // Fetch all books and find which one contains this recipe
+      await recipeBooksStore.fetchBooks()
+      const bookWithRecipe = recipeBooksStore.books.find(book => 
+        book.recipes && book.recipes.includes(recipe.value._id)
+      )
+      if (bookWithRecipe) {
+        bookId = bookWithRecipe._id
+        // Cache it for future use
+        currentBookId.value = bookId
+      }
+    } catch (err) {
+      console.warn('Failed to find book for recipe:', err)
+    }
+  }
+  
   if (bookId) {
     // Force reload by adding timestamp to ensure fresh data
     router.push(`/book/${bookId}?view=rankings&refresh=${Date.now()}`)
   } else {
-      // Navigate to home if no book ID
-      router.push('/')
+    // Navigate to home if no book ID found
+    router.push('/')
   }
 }
 
@@ -1411,8 +1478,8 @@ onMounted(() => {
 
 .snapshot-tab {
   padding: 0.75rem 1.5rem;
-  background-color: #FFF8DC; /* Same as page background */
-  border: 2px solid var(--color-light-brown);
+  background-color: var(--color-light-brown); /* Darker brown for tabs */
+  border: 2px solid var(--color-medium-brown);
   border-bottom: none;
   border-radius: 8px 8px 0 0;
   cursor: pointer;
@@ -1429,6 +1496,8 @@ onMounted(() => {
   height: fit-content;
   min-height: 48px; /* Fixed minimum height */
   flex-shrink: 0; /* Prevent tabs from shrinking */
+  color: var(--color-dark-brown);
+  font-weight: 500;
 }
 
 .snapshot-tab:hover {
@@ -1443,8 +1512,8 @@ onMounted(() => {
 }
 
 .snapshot-tab.active {
-  background-color: #FFF8DC; /* Same as page and content */
-  border-bottom: 2px solid var(--color-light-brown);
+  background-color: var(--color-gold); /* Lighter for active tab */
+  border-bottom: 2px solid var(--color-medium-brown);
   font-weight: 600;
   transform: translateY(-1px);
   box-shadow: 

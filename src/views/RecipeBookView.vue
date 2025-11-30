@@ -7,6 +7,9 @@
       <!-- Book header with name - Outside the book -->
       <div class="book-header">
         <h1 class="book-name">{{ book.name }}</h1>
+        <button @click="handleAddRecipe" class="add-recipe-btn" :disabled="addingRecipe">
+          {{ addingRecipe ? 'Creating...' : '+ Add Recipe' }}
+        </button>
       </div>
       
       <div class="notebook-wrapper">
@@ -17,9 +20,6 @@
             <div v-if="currentView === 'contents'" class="contents-view">
               <div class="contents-header">
                 <h2 class="page-title">Table of Contents</h2>
-                <button @click="handleAddRecipe" class="add-recipe-btn" :disabled="addingRecipe">
-                  {{ addingRecipe ? 'Creating...' : '+ Add Recipe' }}
-                </button>
               </div>
               <div v-if="sortedRecipes.length === 0" class="empty-state">
                 No recipes yet. Add recipes to this book to see them here.
@@ -82,6 +82,25 @@
                   </div>
                 </div>
               </div>
+              <!-- Unranked recipes section -->
+              <div class="rating-section">
+                <div class="rating-header">
+                  <div class="unranked-label">Unranked</div>
+                </div>
+                <div class="recipes-by-rating">
+                  <div
+                    v-for="recipe in getUnrankedRecipes()"
+                    :key="recipe._id"
+                    class="recipe-link"
+                    @click="openRecipe(recipe._id)"
+                  >
+                    {{ recipe.name }}
+                  </div>
+                  <div v-if="getUnrankedRecipes().length === 0" class="no-recipes">
+                    No unranked recipes
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           
@@ -130,6 +149,7 @@ const authStore = useAuthStore()
 
 const book = ref(null)
 const recipes = ref([])
+const snapshotsByRecipe = ref({}) // Map of recipeId -> snapshots array
 const loading = ref(false)
 const error = ref('')
 const currentView = ref('contents')
@@ -160,8 +180,9 @@ async function loadBookData() {
   
   try {
     const bookId = route.params.id
-    // Clear existing recipes first to force reload
+    // Clear existing recipes and snapshots first to force reload
     recipes.value = []
+    snapshotsByRecipe.value = {}
     
     // Always fetch fresh book data (no caching)
     book.value = await recipeBooksStore.fetchBook(bookId)
@@ -175,11 +196,23 @@ async function loadBookData() {
           await recipesStore.fetchRecipe(recipeId)
           const recipe = recipesStore.currentRecipe
           if (recipe) {
-            recipes.value.push(recipe)
+            // Create a deep copy to avoid reactivity issues
+            recipes.value.push({
+              _id: recipe._id,
+              name: recipe.name,
+              description: recipe.description,
+              snapshots: recipe.snapshots ? [...recipe.snapshots] : [],
+              defaultSnapshot: recipe.defaultSnapshot
+            })
             
-            // Load snapshots for this recipe
+            // Load snapshots for this recipe and store them per recipe
             if (recipe.snapshots?.length > 0) {
               await recipesStore.fetchSnapshots(recipeId)
+              // Store snapshots for this specific recipe
+              snapshotsByRecipe.value[recipeId] = [...recipesStore.snapshots]
+            } else {
+              // Initialize empty array for recipes with no snapshots
+              snapshotsByRecipe.value[recipeId] = []
             }
           }
         } catch (err) {
@@ -195,14 +228,19 @@ async function loadBookData() {
 }
 
 function getRecipeSnapshots(recipeId) {
+  // Get snapshots from our per-recipe map
+  const recipeSnapshots = snapshotsByRecipe.value[recipeId] || []
+  
+  // Filter to only include snapshots that are actually in the recipe's snapshots array
   const recipe = recipes.value.find(r => r._id === recipeId)
   if (!recipe || !recipe.snapshots || recipe.snapshots.length === 0) return []
   
-  // Get snapshots from store and sort chronologically
-  const allSnapshots = recipesStore.snapshots.filter(s => 
+  const validSnapshots = recipeSnapshots.filter(s => 
     recipe.snapshots && recipe.snapshots.includes(s._id)
   )
-  return allSnapshots.sort((a, b) => {
+  
+  // Sort chronologically
+  return validSnapshots.sort((a, b) => {
     const dateA = new Date(a.date || 0)
     const dateB = new Date(b.date || 0)
     return dateA - dateB
@@ -212,13 +250,30 @@ function getRecipeSnapshots(recipeId) {
 function getRecipesByRating(rating) {
   return recipes.value.filter(recipe => {
     if (!recipe.defaultSnapshot) return false
-    // Check if we have snapshots loaded for this recipe
-    const recipeSnapshots = recipesStore.snapshots.filter(s => 
-      recipe.snapshots && recipe.snapshots.includes(s._id)
-    )
+    // Get snapshots from our per-recipe map
+    const recipeSnapshots = snapshotsByRecipe.value[recipe._id] || []
     const defaultSnapshot = recipeSnapshots.find(s => s._id === recipe.defaultSnapshot)
     // Return true if default snapshot has this rating
     return defaultSnapshot && defaultSnapshot.ranking === rating
+  })
+}
+
+function getUnrankedRecipes() {
+  return recipes.value.filter(recipe => {
+    // Recipe is unranked if:
+    // 1. It has no default snapshot, OR
+    // 2. It has a default snapshot but no snapshots loaded, OR
+    // 3. The default snapshot has no ranking (ranking is 0, null, or undefined)
+    if (!recipe.defaultSnapshot) return true
+    
+    const recipeSnapshots = snapshotsByRecipe.value[recipe._id] || []
+    if (recipeSnapshots.length === 0) return true
+    
+    const defaultSnapshot = recipeSnapshots.find(s => s._id === recipe.defaultSnapshot)
+    if (!defaultSnapshot) return true
+    
+    // Recipe is unranked if ranking is missing, 0, null, or undefined
+    return !defaultSnapshot.ranking || defaultSnapshot.ranking === 0
   })
 }
 
@@ -241,7 +296,16 @@ function nextPage() {
 
 function openRecipe(recipeId, snapshotId = null) {
   const bookId = route.params.id
-  router.push(`/recipe/${recipeId}${snapshotId ? `?snapshot=${snapshotId}` : ''}${bookId ? `&book=${bookId}` : ''}`)
+  // Build query string properly
+  const queryParams = []
+  if (snapshotId) {
+    queryParams.push(`snapshot=${snapshotId}`)
+  }
+  if (bookId) {
+    queryParams.push(`book=${bookId}`)
+  }
+  const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : ''
+  router.push(`/recipe/${recipeId}${queryString}`)
 }
 
 async function handleAddRecipe() {
@@ -263,29 +327,9 @@ async function handleAddRecipe() {
   // Navigate immediately - don't wait for API calls
   router.push(`/recipe/${tempId}?book=${book.value._id}`)
   
-  // Try to create the recipe in the background (non-blocking)
-  // The recipe page will also try to create it if it doesn't exist
-  recipesStore.createRecipe('New Recipe', '')
-    .then(async (recipeId) => {
-      if (recipeId) {
-        try {
-          await recipeBooksStore.addRecipeToBook(recipeId, book.value._id)
-          // Update the URL with the real recipe ID if we're still on the temp page
-          if (route.params.id === tempId) {
-            router.replace(`/recipe/${recipeId}`)
-          }
-        } catch (bookErr) {
-          console.warn('Failed to add recipe to book:', bookErr)
-        }
-      }
-    })
-    .catch((err) => {
-      console.warn('Background recipe creation failed:', err)
-      // Recipe page will handle creating it
-    })
-    .finally(() => {
-      addingRecipe.value = false
-    })
+  // The recipe page will handle creating the recipe
+  // We don't need to create it here since the recipe page will do it
+  addingRecipe.value = false
 }
 
 // Reload book data when returning to this page (if using keep-alive)
@@ -535,9 +579,6 @@ watch(() => route.query.refresh, () => {
 }
 
 .contents-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: 1.5rem;
 }
 
@@ -587,6 +628,14 @@ watch(() => route.query.refresh, () => {
 .stars {
   display: flex;
   gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.unranked-label {
+  font-size: 1.1rem;
+  color: var(--color-medium-brown);
+  font-weight: 500;
+  font-style: italic;
   margin-bottom: 0.5rem;
 }
 
