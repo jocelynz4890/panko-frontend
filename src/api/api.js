@@ -62,8 +62,8 @@ export const authAPI = {
 
 // RecipeBook API
 export const recipeBookAPI = {
-  createRecipeBook: (user, name) => 
-    api.post('/RecipeBook/createRecipeBook', { user, name }),
+  createRecipeBook: (user, name, coverIndex) => 
+    api.post('/RecipeBook/createRecipeBook', { user, name, coverIndex }),
   
   editRecipeBookName: (book, newName) => 
     api.post('/RecipeBook/editRecipeBookName', { book, newName }),
@@ -84,62 +84,74 @@ export const recipeBookAPI = {
     api.post('/RecipeBook/removeRecipeFromBook', { recipe, book })
 }
 
-// Recipe API
-export const recipeAPI = {
-  createRecipe: (user, name, description) => 
-    api.post('/Recipes/createRecipe', { user, name, description }),
+// Dishes API (formerly Recipes concept)
+export const dishesAPI = {
+  createDish: (user, name, description) => 
+    api.post('/Dishes/createDish', { user, name, description }),
   
-  editRecipeName: (recipe, newName, description) => 
-    api.post('/Recipes/editRecipeName', { recipe, newName, description }),
+  editDishName: (dish, newName, description) => 
+    api.post('/Dishes/editDishName', { dish, newName, description }),
   
-  deleteRecipe: (recipe) => 
-    api.post('/Recipes/deleteRecipe', { recipe }),
+  deleteDish: (dish) => 
+    api.post('/Dishes/deleteDish', { dish }),
   
-  getRecipe: (recipe) => 
-    api.post('/Recipes/_getRecipe', { recipe }),
+  getDish: (dish) => 
+    api.post('/Dishes/_getDish', { dish }),
   
-  addSnapshot: (snapshot, recipe) => 
-    api.post('/Recipes/addSnapshot', { snapshot, recipe }),
+  addRecipe: (recipe, dish) => 
+    api.post('/Dishes/addRecipe', { recipe, dish }),
   
-  removeSnapshot: (snapshot, recipe) => 
-    api.post('/Recipes/removeSnapshot', { snapshot, recipe }),
+  removeRecipe: (recipe, dish) => 
+    api.post('/Dishes/removeRecipe', { recipe, dish }),
   
-  setDefaultSnapshot: (snapshot, recipe) => 
-    api.post('/Recipes/setDefaultSnapshot', { snapshot, recipe })
+  setDefaultRecipe: (recipe, dish) => 
+    api.post('/Dishes/setDefaultRecipe', { recipe, dish })
 }
 
-// Snapshot API
-export const snapshotAPI = {
-  createSnapshot: (user, ingredientsList, subname, pictures, date, instructions, note, ranking, recipe) => 
-    api.post('/Snapshot/createSnapshot', { 
-      user, ingredientsList, subname, pictures, date, instructions, note, ranking, recipe 
+// Recipe API (formerly Snapshot concept)
+export const recipeAPI = {
+  createRecipe: (user, ingredientsList, subname, pictures, date, instructions, note, ranking, dish) => 
+    api.post('/Recipe/createRecipe', { 
+      user, ingredientsList, subname, pictures, date, instructions, note, ranking, dish 
     }),
   
-  editSnapshot: (snapshot, ingredientsList, subname, pictures, date, instructions, note, ranking) => 
-    api.post('/Snapshot/editSnapshot', { 
-      snapshot, ingredientsList, subname, pictures, date, instructions, note, ranking 
+  editRecipe: (recipe, ingredientsList, subname, pictures, date, instructions, note, ranking) => 
+    api.post('/Recipe/editRecipe', { 
+      recipe, ingredientsList, subname, pictures, date, instructions, note, ranking 
     }),
   
-  deleteSnapshot: (snapshot) => 
-    api.post('/Snapshot/deleteSnapshot', { snapshot }),
+  deleteRecipe: (recipe) => 
+    api.post('/Recipe/deleteRecipe', { recipe }),
   
-  deleteAllSnapshotsForRecipe: (recipe) => 
-    api.post('/Snapshot/deleteAllSnapshotsForRecipe', { recipe }),
+  deleteAllRecipesForDish: (dish) => 
+    api.post('/Recipe/deleteAllRecipesForDish', { dish }),
   
-  getSnapshots: (recipe) => 
-    api.post('/Snapshot/_getSnapshots', { recipe })
+  getRecipes: (dish) => 
+    api.post('/Recipe/_getRecipes', { dish }),
+  
+  uploadImage: (recipeId, file, user) => {
+    const formData = new FormData()
+    formData.append('recipe', recipeId)
+    formData.append('file', file)
+    if (user) formData.append('user', user)
+    return api.post('/uploads/recipe-image', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+  }
 }
 
 // Calendar API
 export const calendarAPI = {
-  assignSnapshotToDate: (user, snapshot, date) => 
-    api.post('/Calendar/assignSnapshotToDate', { user, snapshot, date }),
+  assignRecipeToDate: (user, recipe, date) => 
+    api.post('/Calendar/assignRecipeToDate', { user, recipe, date }),
   
   deleteScheduledRecipe: (scheduledRecipe) => 
     api.post('/Calendar/deleteScheduledRecipe', { scheduledRecipe }),
   
-  deleteAllScheduledRecipesWithSnapshot: (snapshot) => 
-    api.post('/Calendar/deleteAllScheduledRecipesWithSnapshot', { snapshot }),
+  deleteAllScheduledRecipesWithRecipe: (recipe) => 
+    api.post('/Calendar/deleteAllScheduledRecipesWithRecipe', { recipe }),
   
   getScheduledRecipes: (user) => 
     api.post('/Calendar/_getScheduledRecipes', { user })

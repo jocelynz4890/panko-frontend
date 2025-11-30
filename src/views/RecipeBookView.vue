@@ -8,7 +8,8 @@
       <div class="book-header">
         <h1 class="book-name">{{ book.name }}</h1>
         <button @click="handleAddRecipe" class="add-recipe-btn" :disabled="addingRecipe">
-          {{ addingRecipe ? 'Creating...' : '+ Add Recipe' }}
+          <img src="/assets/plus_sign.png" alt="Add" class="plus-icon" />
+          {{ addingRecipe ? 'Creating...' : 'Add Recipe' }}
         </button>
       </div>
       
@@ -25,8 +26,9 @@
                 No recipes yet. Add recipes to this book to see them here.
               </div>
               <div v-else class="contents-list">
+                <!-- Regular recipes -->
                 <div
-                  v-for="recipe in sortedRecipes"
+                  v-for="recipe in regularRecipes"
                   :key="recipe._id"
                   class="recipe-entry"
                 >
@@ -44,6 +46,57 @@
                     </div>
                   </div>
                 </div>
+                
+                <!-- Divider before special sections -->
+                <div v-if="untitledRecipes.length > 0 || noSnapshotRecipes.length > 0" class="contents-divider"></div>
+                
+                <!-- Untitled Recipes -->
+                <div v-if="untitledRecipes.length > 0" class="special-section">
+                  <div class="special-section-header">Untitled Recipes</div>
+                  <div
+                    v-for="recipe in untitledRecipes"
+                    :key="recipe._id"
+                    class="recipe-entry"
+                  >
+                    <div class="recipe-name" @click="openRecipe(recipe._id)">
+                      {{ recipe.name }}
+                    </div>
+                    <div class="snapshots-list">
+                      <div
+                        v-for="snapshot in getRecipeSnapshots(recipe._id)"
+                        :key="snapshot._id"
+                        class="snapshot-entry"
+                        @click="openRecipe(recipe._id, snapshot._id)"
+                      >
+                        {{ snapshot.subname || 'Untitled Snapshot' }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- No Recipe (recipes with no snapshots) -->
+                <div v-if="noSnapshotRecipes.length > 0" class="special-section">
+                  <div class="special-section-header">No Recipe</div>
+                  <div
+                    v-for="recipe in noSnapshotRecipes"
+                    :key="recipe._id"
+                    class="recipe-entry"
+                  >
+                    <div class="recipe-name" @click="openRecipe(recipe._id)">
+                      {{ recipe.name }}
+                    </div>
+                    <div class="snapshots-list">
+                      <div
+                        v-for="snapshot in getRecipeSnapshots(recipe._id)"
+                        :key="snapshot._id"
+                        class="snapshot-entry"
+                        @click="openRecipe(recipe._id, snapshot._id)"
+                      >
+                        {{ snapshot.subname || 'Untitled Snapshot' }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
             
@@ -55,14 +108,14 @@
                     <img
                       v-for="i in rating"
                       :key="i"
-                      src="/assets/star.png"
+                      src="/assets/filled_in_star.png"
                       alt="star"
                       class="star-icon"
                     />
                     <img
                       v-for="i in (5 - rating)"
                       :key="i + rating"
-                      src="/assets/star.png"
+                      src="/assets/blank_star.png"
                       alt="empty star"
                       class="star-icon empty"
                     />
@@ -82,10 +135,55 @@
                   </div>
                 </div>
               </div>
-              <!-- Unranked recipes section -->
+            </div>
+          </div>
+          
+          <div class="page right-page" :class="{ 'page-flipped': currentPage > 0 }">
+            <!-- Right page content -->
+            <div v-if="currentView === 'contents'" class="dictionary-view">
+              <div v-if="sortedRecipes.length === 0" class="empty-state">
+                No recipes yet.
+              </div>
+              <div v-else>
+                <div
+                  v-for="group in dictionaryGroups"
+                  :key="group.letter"
+                  class="dictionary-group"
+                >
+                  <div class="dictionary-letter">{{ group.letter }}</div>
+                  <div
+                    v-for="recipe in group.recipes"
+                    :key="recipe._id"
+                    class="dictionary-entry"
+                  >
+                    <div class="dictionary-recipe-line">
+                      <span class="dictionary-recipe-name" @click="openRecipe(recipe._id)">
+                        {{ recipe.name }}
+                      </span>
+                      <span class="dictionary-dots">................................................................................</span>
+                      <span class="dictionary-date">{{ getRecipeDate(recipe._id) }}</span>
+                    </div>
+                    <div
+                      v-for="snapshot in getRecipeSnapshots(recipe._id)"
+                      :key="snapshot._id"
+                      class="dictionary-snapshot-line"
+                      @click="openRecipe(recipe._id, snapshot._id)"
+                    >
+                      <span class="dictionary-snapshot-name">{{ snapshot.subname || 'Untitled Snapshot' }}</span>
+                      <span class="dictionary-dots">................................................................................</span>
+                      <span class="dictionary-date">{{ formatSnapshotDate(snapshot.date) }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div v-else-if="currentView === 'rankings'" class="rankings-view">
+              <!-- Unranked recipes section on right page -->
               <div class="rating-section">
                 <div class="rating-header">
                   <div class="unranked-label">Unranked</div>
+                  <div class="unranked-divider"></div>
                 </div>
                 <div class="recipes-by-rating">
                   <div
@@ -102,29 +200,34 @@
                 </div>
               </div>
             </div>
+            
+            <div v-else class="page-content"></div>
           </div>
           
-          <div class="page right-page" :class="{ 'page-flipped': currentPage > 0 }">
-            <!-- Right page content (can be blank or have additional info) -->
-            <div class="page-content"></div>
-          </div>
-        </div>
-        
-        <!-- Bookmarks -->
-        <div class="bookmarks">
-          <div
-            class="bookmark bookmark-toc"
-            :class="{ active: currentView === 'contents' }"
-            @click="switchView('contents')"
-          >
-            Table of Contents
-          </div>
-          <div
-            class="bookmark bookmark-rankings"
-            :class="{ active: currentView === 'rankings' }"
-            @click="switchView('rankings')"
-          >
-            Rankings
+          <!-- Bookmarks -->
+          <div class="bookmarks">
+            <div
+              class="bookmark bookmark-toc"
+              :class="{ active: currentView === 'contents' }"
+              @click="switchView('contents')"
+              title="Table of Contents"
+            >
+              <img src="/assets/table_of_contents_bookmark_horizontal.png" alt="Table of Contents" class="bookmark-bg" />
+              <img src="/assets/home.png" alt="Home" class="bookmark-overlay" />
+              <img src="/assets/bookmark_on_hover_horizontal.png" alt="Table of Contents" class="bookmark-bg-hover" />
+              <img src="/assets/home.png" alt="Home" class="bookmark-overlay-hover" />
+            </div>
+            <div
+              class="bookmark bookmark-rankings"
+              :class="{ active: currentView === 'rankings' }"
+              @click="switchView('rankings')"
+              title="Rankings"
+            >
+              <img src="/assets/ranking_bookmark_horizontal.png" alt="Rankings" class="bookmark-bg" />
+              <img src="/assets/filled_in_star.png" alt="Star" class="bookmark-overlay bookmark-star-overlay" />
+              <img src="/assets/bookmark_on_hover_horizontal.png" alt="Rankings" class="bookmark-bg-hover" />
+              <img src="/assets/filled_in_star.png" alt="Star" class="bookmark-overlay-hover bookmark-star-overlay" />
+            </div>
           </div>
         </div>
         
@@ -168,6 +271,74 @@ onMounted(() => {
 const sortedRecipes = computed(() => {
   return [...recipes.value].sort((a, b) => a.name.localeCompare(b.name))
 })
+
+// Categorized recipes for table of contents
+const regularRecipes = computed(() => {
+  return sortedRecipes.value.filter(recipe => {
+    const snapshots = getRecipeSnapshots(recipe._id)
+    return snapshots.length > 0 && recipe.name !== 'New Recipe'
+  })
+})
+
+const untitledRecipes = computed(() => {
+  return sortedRecipes.value.filter(recipe => {
+    const snapshots = getRecipeSnapshots(recipe._id)
+    return snapshots.length > 0 && recipe.name === 'New Recipe'
+  })
+})
+
+const noSnapshotRecipes = computed(() => {
+  return sortedRecipes.value.filter(recipe => {
+    const snapshots = getRecipeSnapshots(recipe._id)
+    return snapshots.length === 0
+  })
+})
+
+// Dictionary-style grouping by first letter
+const dictionaryGroups = computed(() => {
+  const groups = {}
+  
+  sortedRecipes.value.forEach(recipe => {
+    const firstLetter = recipe.name.charAt(0).toUpperCase()
+    if (!groups[firstLetter]) {
+      groups[firstLetter] = []
+    }
+    groups[firstLetter].push(recipe)
+  })
+  
+  // Convert to array and sort by letter
+  return Object.keys(groups)
+    .sort()
+    .map(letter => ({
+      letter,
+      recipes: groups[letter]
+    }))
+})
+
+function getRecipeDate(recipeId) {
+  const recipe = recipes.value.find(r => r._id === recipeId)
+  if (!recipe) return ''
+  
+  // Get the most recent snapshot date, or empty if no snapshots
+  const snapshots = getRecipeSnapshots(recipeId)
+  if (snapshots.length === 0) return ''
+  
+  // Get the most recent snapshot (they're sorted chronologically, oldest first)
+  const mostRecent = snapshots[snapshots.length - 1]
+  return formatSnapshotDate(mostRecent.date)
+}
+
+function formatSnapshotDate(dateString) {
+  if (!dateString) return ''
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) return ''
+  
+  // Format as MM/DD/YYYY
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const year = date.getFullYear()
+  return `${month}/${day}/${year}`
+}
 
 const hasNextPage = computed(() => {
   // For now, we only have one page of content
@@ -419,34 +590,43 @@ watch(() => route.query.refresh, () => {
   background-color: var(--color-dark-brown);
   padding: 1rem;
   border-radius: 8px;
+  overflow: visible;
 }
 
 .notebook {
   position: relative;
-  /* Custom book background - shared with RecipeView */
-  background: 
+  /* Warm dark burgundy red grainy inside cover behind pages */
+  background-color: #8B3A3A;
+  background-image: 
     repeating-linear-gradient(
       0deg,
-      rgba(139, 115, 85, 0.03) 0px,
+      rgba(0, 0, 0, 0.1) 0px,
       transparent 1px,
       transparent 2px,
-      rgba(139, 115, 85, 0.03) 3px
+      rgba(0, 0, 0, 0.1) 3px
     ),
-    radial-gradient(circle at 20% 50%, rgba(250, 235, 215, 0.3) 0%, transparent 50%),
-    radial-gradient(circle at 80% 50%, rgba(250, 235, 215, 0.3) 0%, transparent 50%),
-    linear-gradient(135deg, #f5f5dc 0%, #fef9e7 50%, #f5f5dc 100%);
-  background-size: 100% 4px, 100% 100%, 100% 100%, 100% 100%;
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.08) 0px,
+      transparent 1px,
+      transparent 2px,
+      rgba(0, 0, 0, 0.08) 3px
+    );
+  background-size: 100% 4px, 4px 100%;
   border-radius: 8px;
   padding: 2rem;
   min-height: 800px;
   filter: contrast(1.05) brightness(0.98);
+  overflow: visible;
 }
 
 .pages-container {
   display: flex;
   gap: 0;
   min-height: 800px;
+  max-height: 90vh;
   position: relative;
+  overflow: visible;
 }
 
 /* Page binding gradient in the middle - smoother */
@@ -478,12 +658,15 @@ watch(() => route.query.refresh, () => {
   flex: 1;
   /* Paper background - no gradient */
   background-color: #FFF8DC;
-  padding: 2rem;
+  padding: 3rem;
   box-shadow: 
     inset 0 0 20px rgba(0, 0, 0, 0.03),
     inset 0 0 60px rgba(139, 115, 85, 0.02);
   position: relative;
   min-height: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* 3D shadows for page depth */
@@ -500,6 +683,9 @@ watch(() => route.query.refresh, () => {
   display: flex;
   flex-direction: column;
   min-height: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .right-page {
@@ -511,6 +697,9 @@ watch(() => route.query.refresh, () => {
     8px 0 16px rgba(0, 0, 0, 0.15),
     4px 0 8px rgba(0, 0, 0, 0.1),
     2px 0 4px rgba(0, 0, 0, 0.08);
+  max-height: 90vh;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .page::before {
@@ -582,8 +771,27 @@ watch(() => route.query.refresh, () => {
   margin-bottom: 1.5rem;
 }
 
+.contents-divider {
+  height: 1px;
+  background-color: var(--color-light-brown);
+  margin: 1.5rem 0;
+  opacity: 0.6;
+}
+
+.special-section {
+  margin-top: 1rem;
+}
+
+.special-section-header {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-medium-brown);
+  margin-bottom: 0.75rem;
+  font-style: italic;
+}
+
 .add-recipe-btn {
-  padding: 0.5rem 1rem;
+  padding: 0.75rem 1rem;
   background-color: var(--color-medium-brown);
   color: white;
   border-radius: 4px;
@@ -591,6 +799,14 @@ watch(() => route.query.refresh, () => {
   transition: background-color 0.2s;
   white-space: nowrap;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.plus-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .add-recipe-btn:hover:not(:disabled) {
@@ -621,6 +837,13 @@ watch(() => route.query.refresh, () => {
   margin-bottom: 2rem;
 }
 
+.rankings-divider {
+  height: 1px;
+  background-color: var(--color-light-brown);
+  margin: 1.5rem 0;
+  opacity: 0.6;
+}
+
 .rating-header {
   margin-bottom: 0.75rem;
 }
@@ -639,13 +862,17 @@ watch(() => route.query.refresh, () => {
   margin-bottom: 0.5rem;
 }
 
+.unranked-divider {
+  height: 1px;
+  background-color: var(--color-light-brown);
+  margin-top: 0.5rem;
+  margin-bottom: 0.75rem;
+  opacity: 0.6;
+}
+
 .star-icon {
   width: 20px;
   height: 20px;
-}
-
-.star-icon.empty {
-  opacity: 0.3;
 }
 
 .recipes-by-rating {
@@ -674,42 +901,174 @@ watch(() => route.query.refresh, () => {
 
 .bookmarks {
   position: absolute;
-  right: -20px;
-  top: 50%;
-  transform: translateY(-50%);
+  right: -80px;
+  top: 20px;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  z-index: 10;
+  gap: 0;
+  z-index: 9999;
+  background: transparent;
 }
 
 .bookmark {
-  width: 40px;
-  height: 120px;
-  background-color: var(--color-medium-brown);
-  color: white;
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  padding: 0.5rem;
+  margin-bottom: -150px;
+}
+
+.bookmark {
+  width: 80px;
+  height: 240px;
+  position: relative;
   cursor: pointer;
-  border-radius: 4px 0 0 4px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  transition: all 0.2s;
+  border-radius: 0;
+  transition: opacity 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: -2px 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: none;
+  overflow: visible;
+  background: transparent;
 }
 
-.bookmark:hover {
-  background-color: var(--color-dark-brown);
-  transform: translateX(-5px);
+.bookmark img {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
-.bookmark.active {
-  background-color: var(--color-dark-brown);
-  width: 50px;
+.bookmark-bg,
+.bookmark-bg-hover {
+  z-index: 1;
+}
+
+.bookmark-overlay,
+.bookmark-overlay-hover {
+  z-index: 2;
+  width: 50px !important;
+  height: 50px !important;
+  object-fit: contain;
+  opacity: 0.9;
+  left: 40%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.bookmark-star-overlay {
+  width: 37.5px !important;
+  height: 37.5px !important;
+}
+
+.bookmark-bg-hover,
+.bookmark-overlay-hover {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.bookmark:hover .bookmark-bg {
+  opacity: 0;
+}
+
+.bookmark:hover .bookmark-bg-hover {
+  opacity: 1;
+}
+
+.bookmark:hover .bookmark-overlay {
+  opacity: 0;
+}
+
+.bookmark:hover .bookmark-overlay-hover {
+  opacity: 0.9;
+}
+
+
+/* Dictionary view styles */
+.dictionary-view {
+  padding: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.dictionary-group {
+  margin-bottom: 1.5rem;
+}
+
+.dictionary-letter {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--color-dark-brown);
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-light-brown);
+  padding-bottom: 0.25rem;
+}
+
+.dictionary-entry {
+  margin-bottom: 0.75rem;
+}
+
+.dictionary-recipe-line,
+.dictionary-snapshot-line {
+  display: flex;
+  align-items: baseline;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin-bottom: 0.25rem;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  gap: 0;
+}
+
+.dictionary-snapshot-line {
+  margin-left: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--color-medium-brown);
+  cursor: pointer;
+}
+
+.dictionary-snapshot-line:hover {
+  color: var(--color-dark-brown);
+}
+
+.dictionary-recipe-name {
+  font-weight: 500;
+  color: var(--color-dark-brown);
+  cursor: pointer;
+  white-space: nowrap;
+  margin-right: 0.5rem;
+}
+
+.dictionary-recipe-name:hover {
+  color: var(--color-medium-brown);
+  text-decoration: underline;
+}
+
+.dictionary-snapshot-name {
+  white-space: nowrap;
+  margin-right: 0.5rem;
+}
+
+.dictionary-dots {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--color-light-brown);
+  font-size: 0.7rem;
+  margin: 0;
+  padding: 0 0.25rem;
+  opacity: 0.4;
+  min-width: 0;
+  max-width: 100%;
+  letter-spacing: 2px;
+}
+
+.dictionary-date {
+  white-space: nowrap;
+  color: var(--color-medium-brown);
+  font-size: 0.9rem;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
 }
 
 

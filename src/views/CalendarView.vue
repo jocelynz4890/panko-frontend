@@ -12,7 +12,7 @@
           <h2 class="current-month">{{ currentMonthYear }}</h2>
           <button @click="nextMonth" class="nav-month">Next →</button>
         </div>
-        <div class="calendar-wrapper">
+        <div class="calendar-wrapper" ref="calendarWrapperRef">
           <div class="calendar-grid">
         <div
           v-for="day in calendarDays"
@@ -54,7 +54,7 @@
       </div>
     
       <!-- Snapshot Selection Panel -->
-      <div class="snapshot-panel">
+      <div class="snapshot-panel" ref="snapshotPanelRef" :style="{ height: snapshotPanelHeight }">
         <h3>Add Snapshot to Calendar</h3>
         <div v-if="availableSnapshots.length === 0" class="no-snapshots">
           No snapshots available. Create snapshots in your recipes first.
@@ -96,7 +96,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, onActivated } from 'vue'
+import { ref, computed, onMounted, watch, onActivated, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCalendarStore } from '../stores/calendar'
 import { useRecipeBooksStore } from '../stores/recipeBooks'
@@ -118,6 +118,9 @@ const submitting = ref(false)
 const availableSnapshots = ref([])
 const scheduledRecipesData = ref([])
 const isDragging = ref(false) // Track if we're currently dragging to prevent click events
+const calendarWrapperRef = ref(null)
+const snapshotPanelRef = ref(null)
+const snapshotPanelHeight = ref('auto')
 
 const currentMonthYear = computed(() => {
   return currentDate.value.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
@@ -225,11 +228,8 @@ async function loadData() {
         }
       }
     }
-    // Sort snapshots by recipe name, then by date (newest first)
+    // Sort snapshots by date (newest first)
     allSnapshots.sort((a, b) => {
-      if (a.recipeName !== b.recipeName) {
-        return a.recipeName.localeCompare(b.recipeName)
-      }
       const dateA = a.date ? new Date(a.date) : new Date(0)
       const dateB = b.date ? new Date(b.date) : new Date(0)
       return dateB - dateA
@@ -312,6 +312,7 @@ async function loadData() {
     error.value = err.message || 'Failed to load calendar data'
   } finally {
     loading.value = false
+    updateSnapshotPanelHeight()
   }
 }
 
@@ -604,8 +605,22 @@ function clearPendingUpdates() {
   }
 }
 
+function updateSnapshotPanelHeight() {
+  nextTick(() => {
+    if (calendarWrapperRef.value && snapshotPanelRef.value) {
+      const calendarHeight = calendarWrapperRef.value.offsetHeight
+      snapshotPanelHeight.value = `${calendarHeight}px`
+    }
+  })
+}
+
 onMounted(() => {
   loadData()
+  updateSnapshotPanelHeight()
+})
+
+watch(() => currentDate.value, () => {
+  updateSnapshotPanelHeight()
 })
 
 // Reload data when navigating to this route (in case recipes were updated)
@@ -613,6 +628,7 @@ watch(() => route.path, (newPath, oldPath) => {
   if (newPath === '/calendar' && oldPath && oldPath !== newPath) {
     console.log('Calendar route activated - reloading data to get latest recipe defaults')
     loadData()
+    updateSnapshotPanelHeight()
   }
 })
 
@@ -620,6 +636,7 @@ watch(() => route.path, (newPath, oldPath) => {
 onActivated(() => {
   console.log('Calendar component activated - reloading data to get latest recipe defaults')
   loadData()
+  updateSnapshotPanelHeight()
 })
 </script>
 
@@ -802,7 +819,6 @@ onActivated(() => {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 250px); /* Limit height based on viewport */
 }
 
 .snapshot-panel h3 {

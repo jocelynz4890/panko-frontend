@@ -19,7 +19,9 @@
       </div>
       
       <div class="book-card add-book" @click="showAddBookModal = true">
-        <div class="add-button">+</div>
+        <div class="add-button">
+          <img src="/assets/plus_sign.png" alt="Add" class="plus-icon" />
+        </div>
         <div class="book-name">Add Book</div>
       </div>
     </div>
@@ -86,23 +88,42 @@ const selectedCoverIndex = ref(0)
 const createError = ref('')
 const creating = ref(false)
 
-// Book covers - using available assets and creating a system for covers
-// In a real app, these would be provided covers
-const bookCovers = ref([
-  '/assets/home.png',
-  '/assets/panko_logo.png',
-  // Add more cover options as needed
-  // For now, we'll use a pattern or allow custom covers
-])
+// Dynamically load book covers from /assets/covers folder
+const bookCovers = ref([])
+
+async function loadBookCovers() {
+  // In a Vite app, we can use import.meta.glob to dynamically import all covers
+  const coverModules = import.meta.glob('/assets/covers/*.png', { eager: true })
+  const covers = []
+  
+  for (const path in coverModules) {
+    const module = coverModules[path]
+    if (module.default) {
+      covers.push(module.default)
+    }
+  }
+  
+  // Sort covers by filename to ensure consistent order
+  covers.sort()
+  bookCovers.value = covers
+}
 
 const books = computed(() => recipeBooksStore.books)
 const loading = computed(() => recipeBooksStore.loading)
 const error = computed(() => recipeBooksStore.error)
 
 function getBookCover(book) {
-  // Use a hash of the book ID to consistently assign a cover
-  // In a real implementation, the cover would be stored with the book
-  const index = book._id ? parseInt(book._id.slice(-1), 16) % bookCovers.value.length : 0
+  // Use the stored coverIndex if available, otherwise fall back to hash
+  let index = 0
+  if (book.coverIndex !== undefined && book.coverIndex !== null) {
+    index = book.coverIndex
+  } else if (book._id) {
+    index = parseInt(book._id.slice(-1), 16) % bookCovers.value.length
+  }
+  // Ensure index is within bounds
+  if (index < 0 || index >= bookCovers.value.length) {
+    index = 0
+  }
   return bookCovers.value[index]
 }
 
@@ -127,7 +148,7 @@ async function handleCreateBook() {
   createError.value = ''
   
   try {
-    await recipeBooksStore.createBook(newBookName.value.trim())
+    await recipeBooksStore.createBook(newBookName.value.trim(), selectedCoverIndex.value)
     closeModal()
   } catch (err) {
     createError.value = err.message || 'Failed to create book'
@@ -137,6 +158,7 @@ async function handleCreateBook() {
 }
 
 onMounted(async () => {
+  loadBookCovers()
   if (authStore.isAuthenticated) {
     await recipeBooksStore.fetchBooks()
   }
@@ -219,10 +241,15 @@ onMounted(async () => {
 }
 
 .add-button {
-  font-size: 4rem;
-  color: var(--color-medium-brown);
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   margin-bottom: 0.5rem;
+}
+
+.add-button .plus-icon {
+  width: 48px;
+  height: 48px;
 }
 
 .modal-overlay {

@@ -41,13 +41,13 @@ export const useRecipeBooksStore = defineStore('recipeBooks', () => {
     }
   }
 
-  async function createBook(name) {
+  async function createBook(name, coverIndex) {
     if (!authStore.user) return null
     
     loading.value = true
     error.value = null
     try {
-      const response = await recipeBookAPI.createRecipeBook(authStore.user, name)
+      const response = await recipeBookAPI.createRecipeBook(authStore.user, name, coverIndex)
       await fetchBooks()
       return response.data.book
     } catch (err) {

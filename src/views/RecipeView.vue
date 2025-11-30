@@ -9,7 +9,7 @@
       <div class="book-header">
         <h1 class="book-name">{{ currentBookName }}</h1>
         <button class="edit-toggle" @click="toggleEditMode" :disabled="saving">
-          <span class="edit-icon">✏️</span>
+          <img src="/assets/pencil.png" alt="Edit" class="edit-icon" />
           {{ saving ? 'Saving...' : (editMode ? 'Save' : 'Edit') }}
         </button>
       </div>
@@ -53,20 +53,24 @@
                 class="set-default-header-btn"
                 title="Set as default snapshot"
               >
-                ⭐ Set as Default
+                <img src="/assets/filled_in_star.png" alt="Star" class="star-icon-small" />
+                Set as Default
               </button>
               <span
                 v-if="!isNewSnapshot && currentSnapshot && recipe && currentSnapshot._id === recipe.defaultSnapshot"
                 class="default-badge"
                 title="This is the default snapshot"
               >
-                ⭐ Default
+                <img src="/assets/filled_in_star.png" alt="Star" class="star-icon-small" />
+                Default
               </span>
             </div>
           </div>
           
           <div class="recipe-image-container" :class="{ editable: editMode }">
-            <div v-if="editMode" class="edit-indicator">✏️</div>
+            <div v-if="editMode" class="edit-indicator">
+              <img src="/assets/pencil.png" alt="Edit" class="edit-indicator-icon" />
+            </div>
             <img
               v-if="currentSnapshot && currentSnapshot.pictures && currentSnapshot.pictures.length > 0"
               :src="currentSnapshot.pictures[0]"
@@ -94,10 +98,9 @@
                 <img
                   v-for="i in 5"
                   :key="i"
-                  src="/assets/star.png"
+                  :src="i <= (editableSnapshot.ranking || currentSnapshot?.ranking || 0) ? '/assets/filled_in_star.png' : '/assets/blank_star.png'"
                   alt="star"
                   class="star-icon"
-                  :class="{ filled: i <= (editableSnapshot.ranking || currentSnapshot?.ranking || 0) }"
                 />
               </div>
               <select v-else v-model.number="editableSnapshot.ranking" class="rating-select">
@@ -120,7 +123,8 @@
                 :class="{ active: isNewSnapshot }"
                 @click="createNewSnapshot"
               >
-                + New
+                <img src="/assets/plus_sign.png" alt="New" class="plus-icon" />
+                New
               </div>
               
               <!-- Existing snapshots - newest first, oldest last (left to right after new button) -->
@@ -135,7 +139,7 @@
                 @click="switchSnapshot(index)"
               >
                 <span class="tab-label">{{ formatDateShort(snapshot.date) || snapshot.subname || `Snapshot ${index + 1}` }}</span>
-                <span v-if="recipe && snapshot._id === recipe.defaultSnapshot" class="default-icon" title="Default Snapshot">⭐</span>
+                <img v-if="recipe && snapshot._id === recipe.defaultSnapshot" src="/assets/filled_in_star.png" alt="Default" class="default-icon" title="Default Snapshot" />
               </div>
               </div>
             </div>
@@ -145,7 +149,9 @@
             <!-- Always show content, even if no snapshots exist -->
             <div class="content-section">
               <div class="section" :class="{ editable: editMode }">
-                <div v-if="editMode" class="edit-indicator">✏️</div>
+                <div v-if="editMode" class="edit-indicator">
+                  <img src="/assets/pencil.png" alt="Edit" class="edit-indicator-icon" />
+                </div>
                 <h3 class="section-title">Ingredients</h3>
                 <textarea
                   v-if="editMode"
@@ -158,7 +164,9 @@
               </div>
               
               <div class="section" :class="{ editable: editMode }">
-                <div v-if="editMode" class="edit-indicator">✏️</div>
+                <div v-if="editMode" class="edit-indicator">
+                  <img src="/assets/pencil.png" alt="Edit" class="edit-indicator-icon" />
+                </div>
                 <h3 class="section-title">Instructions</h3>
                 <textarea
                   v-if="editMode"
@@ -171,7 +179,9 @@
               </div>
               
               <div class="section" :class="{ editable: editMode }">
-                <div v-if="editMode" class="edit-indicator">✏️</div>
+                <div v-if="editMode" class="edit-indicator">
+                  <img src="/assets/pencil.png" alt="Edit" class="edit-indicator-icon" />
+                </div>
                 <h3 class="section-title">Notes</h3>
                 <textarea
                   v-if="editMode"
@@ -187,24 +197,30 @@
             </div>
           </div>
           </div>
-        </div>
-        
-        <!-- Bookmarks - Always visible, shared with RecipeBookView -->
-        <div class="bookmarks">
+          
+          <!-- Bookmarks - Always visible, shared with RecipeBookView -->
+          <div class="bookmarks">
           <div
             class="bookmark bookmark-toc"
             @click="goToTableOfContents"
             title="Go to Table of Contents"
           >
-            Table of Contents
+            <img src="/assets/table_of_contents_bookmark_horizontal.png" alt="Table of Contents" class="bookmark-bg" />
+            <img src="/assets/home.png" alt="Home" class="bookmark-overlay" />
+            <img src="/assets/bookmark_on_hover_horizontal.png" alt="Table of Contents" class="bookmark-bg-hover" />
+            <img src="/assets/home.png" alt="Home" class="bookmark-overlay-hover" />
           </div>
           <div
             class="bookmark bookmark-rankings"
             @click="goToRankings"
             title="Go to Rankings"
           >
-            Rankings
+            <img src="/assets/ranking_bookmark_horizontal.png" alt="Rankings" class="bookmark-bg" />
+            <img src="/assets/filled_in_star.png" alt="Star" class="bookmark-overlay bookmark-star-overlay" />
+            <img src="/assets/bookmark_on_hover_horizontal.png" alt="Rankings" class="bookmark-bg-hover" />
+            <img src="/assets/filled_in_star.png" alt="Star" class="bookmark-overlay-hover bookmark-star-overlay" />
           </div>
+        </div>
         </div>
       </div>
     </div>
@@ -309,6 +325,8 @@ async function loadRecipe() {
   if (isTempId) {
     recipesStore.snapshots = []
     snapshotsBackup.value = []
+    // Open new recipes in edit mode
+    editMode.value = true
   }
   
   // Show empty state immediately
@@ -368,8 +386,8 @@ async function loadRecipe() {
         if (recipesStore.snapshots.length > 0) {
           snapshotsBackup.value = [...recipesStore.snapshots]
         }
-      } else if (isTempId) {
-        // Ensure snapshots are cleared for new recipes
+      } else {
+        // Clear snapshots for new recipes (temp IDs) or recipes with no snapshots
         recipesStore.snapshots = []
         snapshotsBackup.value = []
       }
@@ -404,6 +422,8 @@ async function loadRecipe() {
         loadSnapshotData(null)
       } else {
       // Recipe doesn't exist yet - create it
+      // Open in edit mode for new recipes
+      editMode.value = true
       try {
         // Try to create recipe with a timeout
         const createPromise = recipesStore.createRecipe('New Recipe', '')
@@ -1074,23 +1094,29 @@ onMounted(() => {
   background-color: var(--color-dark-brown);
   padding: 1rem;
   border-radius: 8px;
+  overflow: visible;
 }
 
 .notebook {
   position: relative;
-  /* Custom book background - shared with RecipeBookView */
-  background: 
+  /* Warm dark burgundy red grainy inside cover behind pages */
+  background-color: #8B3A3A;
+  background-image: 
     repeating-linear-gradient(
       0deg,
-      rgba(139, 115, 85, 0.03) 0px,
+      rgba(0, 0, 0, 0.1) 0px,
       transparent 1px,
       transparent 2px,
-      rgba(139, 115, 85, 0.03) 3px
+      rgba(0, 0, 0, 0.1) 3px
     ),
-    radial-gradient(circle at 20% 50%, rgba(250, 235, 215, 0.3) 0%, transparent 50%),
-    radial-gradient(circle at 80% 50%, rgba(250, 235, 215, 0.3) 0%, transparent 50%),
-    linear-gradient(135deg, #f5f5dc 0%, #fef9e7 50%, #f5f5dc 100%);
-  background-size: 100% 4px, 100% 100%, 100% 100%, 100% 100%;
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.08) 0px,
+      transparent 1px,
+      transparent 2px,
+      rgba(0, 0, 0, 0.08) 3px
+    );
+  background-size: 100% 4px, 4px 100%;
   border-radius: 8px;
   padding: 2rem;
   min-height: 700px;
@@ -1134,7 +1160,9 @@ onMounted(() => {
 }
 
 .edit-icon {
-  font-size: 1.2rem;
+  width: 18px;
+  height: 18px;
+  margin-right: 0.25rem;
 }
 
 .pages-container {
@@ -1142,6 +1170,7 @@ onMounted(() => {
   gap: 0;
   min-height: 700px;
   position: relative;
+  overflow: visible;
 }
 
 /* Page binding gradient in the middle - smoother */
@@ -1205,8 +1234,8 @@ onMounted(() => {
 .right-page {
   border-radius: 0 8px 8px 0;
   padding-left: 4rem;
-  /* Transparent - brown background shows through */
-  background-color: transparent;
+  /* Page background color */
+  background-color: #FFF8DC;
   /* 3D shadow effect - pages stacked, showing depth */
   box-shadow: 
     inset 0 0 20px rgba(0, 0, 0, 0.03),
@@ -1364,8 +1393,15 @@ onMounted(() => {
   background-color: rgba(255, 255, 255, 0.9);
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
-  font-size: 0.9rem;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-indicator-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .recipe-image {
@@ -1418,11 +1454,16 @@ onMounted(() => {
 }
 
 .meta-item.editable::after {
-  content: '✏️';
+  content: '';
   position: absolute;
   top: 0;
   right: 0;
-  font-size: 0.8rem;
+  width: 16px;
+  height: 16px;
+  background-image: url('/assets/pencil.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
   opacity: 0.7;
 }
 
@@ -1434,11 +1475,10 @@ onMounted(() => {
 .star-icon {
   width: 24px;
   height: 24px;
-  opacity: 0.3;
 }
 
-.star-icon.filled {
-  opacity: 1;
+.star-icon.empty {
+  opacity: 0.3;
 }
 
 .tab-content-wrapper {
@@ -1502,7 +1542,6 @@ onMounted(() => {
 
 .snapshot-tab:hover {
   background-color: var(--color-gold);
-  transform: translateY(-2px);
   box-shadow: 
     0 -4px 8px rgba(0, 0, 0, 0.15),
     inset 0 1px 0 rgba(255, 255, 255, 0.3);
@@ -1515,7 +1554,6 @@ onMounted(() => {
   background-color: var(--color-gold); /* Lighter for active tab */
   border-bottom: 2px solid var(--color-medium-brown);
   font-weight: 600;
-  transform: translateY(-1px);
   box-shadow: 
     0 -2px 6px rgba(0, 0, 0, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.3);
@@ -1538,20 +1576,32 @@ onMounted(() => {
 }
 
 .default-icon {
-  font-size: 1rem;
-  color: var(--color-gold);
+  width: 16px;
+  height: 16px;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+.star-icon-small {
+  width: 16px;
+  height: 16px;
 }
 
 .new-tab {
   background-color: var(--color-medium-brown);
   color: white;
   border-color: var(--color-medium-brown);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.new-tab .plus-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .new-tab:hover {
   background-color: var(--color-dark-brown);
-  transform: translateY(-3px);
   box-shadow: 
     0 -4px 8px rgba(0, 0, 0, 0.15),
     inset 0 1px 0 rgba(255, 255, 255, 0.3);
@@ -1559,7 +1609,6 @@ onMounted(() => {
 
 .new-tab.active {
   background-color: var(--color-medium-brown);
-  transform: translateY(-1px);
   box-shadow: 
     0 -2px 6px rgba(0, 0, 0, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.3);
@@ -1654,43 +1703,85 @@ onMounted(() => {
 
 .bookmarks {
   position: absolute;
-  right: -20px;
-  top: 50%;
-  transform: translateY(-50%);
+  right: -80px;
+  top: 20px;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  z-index: 10;
+  gap: 0;
+  z-index: 9999;
+  background: transparent;
 }
 
 .bookmark {
-  width: 40px;
-  height: 120px;
-  background-color: var(--color-medium-brown);
-  color: white;
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  padding: 0.5rem;
+  margin-bottom: -160px;
+}
+
+.bookmark {
+  width: 80px;
+  height: 240px;
+  position: relative;
   cursor: pointer;
-  border-radius: 4px 0 0 4px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  transition: all 0.2s;
+  border-radius: 0;
+  transition: opacity 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: -2px 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: none;
+  overflow: visible;
+  background: transparent;
 }
 
-.bookmark:hover {
-  background-color: var(--color-dark-brown);
-  transform: translateX(-5px);
+.bookmark img {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
-.bookmark.active {
-  background-color: var(--color-dark-brown);
-  width: 50px;
+.bookmark-bg,
+.bookmark-bg-hover {
+  z-index: 1;
 }
+
+.bookmark-overlay,
+.bookmark-overlay-hover {
+  z-index: 2;
+  width: 50px !important;
+  height: 50px !important;
+  object-fit: contain;
+  opacity: 0.9;
+  left: 40%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.bookmark-star-overlay {
+  width: 37.5px !important;
+  height: 37.5px !important;
+}
+
+.bookmark-bg-hover,
+.bookmark-overlay-hover {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.bookmark:hover .bookmark-bg {
+  opacity: 0;
+}
+
+.bookmark:hover .bookmark-bg-hover {
+  opacity: 1;
+}
+
+.bookmark:hover .bookmark-overlay {
+  opacity: 0;
+}
+
+.bookmark:hover .bookmark-overlay-hover {
+  opacity: 0.9;
+}
+
 
 @media (max-width: 1024px) {
   .recipe-spread {
@@ -1726,10 +1817,6 @@ onMounted(() => {
     border-radius: 4px;
   }
   
-  .bookmark.active {
-    width: 110px;
-    height: 45px;
-  }
 }
 
 @media (max-width: 768px) {

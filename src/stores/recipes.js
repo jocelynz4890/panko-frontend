@@ -19,19 +19,15 @@ export const useRecipesStore = defineStore('recipes', () => {
       currentRecipe.value = response.data[0]
       
       // Fetch snapshots for this recipe
-      // Only clear snapshots if the recipe explicitly has no snapshots
-      // If we already have snapshots for this recipe, preserve them
+      // Always clear snapshots first, then load if recipe has snapshots
       const hasSnapshotsInRecipe = currentRecipe.value?.snapshots?.length > 0
-      const existingSnapshotsAreForThisRecipe = snapshots.value.length > 0 && 
-        snapshots.value.some(s => s.recipe === recipeId)
       
       if (hasSnapshotsInRecipe) {
         await fetchSnapshots(recipeId)
-      } else if (!existingSnapshotsAreForThisRecipe) {
-        // Only clear if we don't have snapshots for this recipe already
+      } else {
+        // Clear snapshots if recipe has no snapshots
         snapshots.value = []
       }
-      // Preserve existing snapshots if they're for this recipe
       
       return currentRecipe.value
     } catch (err) {

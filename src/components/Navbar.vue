@@ -5,9 +5,18 @@
       <span class="username">{{ username }}</span>
     </div>
     <div class="navbar-right">
-      <button @click="$router.push('/')" class="nav-button">Home</button>
-      <button @click="$router.push('/calendar')" class="nav-button">Calendar</button>
-      <button @click="handleSignOut" class="nav-button">Sign Out</button>
+      <button @click="$router.push('/')" class="nav-button">
+        <img src="/assets/home.png" alt="Home" class="nav-icon" />
+        Home
+      </button>
+      <button @click="$router.push('/calendar')" class="nav-button">
+        <img src="/assets/calendar.png" alt="Calendar" class="nav-icon" />
+        Calendar
+      </button>
+      <button @click="handleSignOut" class="nav-button">
+        <img src="/assets/sign_out.png" alt="Sign Out" class="nav-icon" />
+        Sign Out
+      </button>
     </div>
   </nav>
 </template>
@@ -64,13 +73,23 @@ function handleSignOut() {
   padding: 0.5rem 1rem;
   background-color: var(--color-light-brown);
   color: var(--color-dark-brown);
+  border: none;
   border-radius: 4px;
-  font-size: 0.95rem;
   transition: background-color 0.2s;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
 }
 
 .nav-button:hover {
   background-color: var(--color-gold);
+}
+
+.nav-icon {
+  height: 20px;
+  width: auto;
 }
 
 @media (max-width: 768px) {
