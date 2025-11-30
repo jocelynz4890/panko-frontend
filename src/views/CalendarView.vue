@@ -600,6 +600,12 @@ async function submitUpdates() {
     }
     // Force reactivity update to ensure UI reflects cleared pending updates
     await nextTick()
+    // Double-check that pending updates are cleared
+    if (calendarStore.pendingUpdates.length > 0) {
+      console.warn('Pending updates still exist after save, forcing clear')
+      calendarStore.clearPendingUpdates()
+      await nextTick()
+    }
   } catch (err) {
     // Only show error if the actual save operations failed
     error.value = err.message || 'Failed to save changes'

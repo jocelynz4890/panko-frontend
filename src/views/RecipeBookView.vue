@@ -969,6 +969,7 @@ watch(() => route.query.refresh, () => {
   box-shadow: none;
   overflow: visible;
   background: transparent;
+  pointer-events: none;
 }
 
 .bookmark img {

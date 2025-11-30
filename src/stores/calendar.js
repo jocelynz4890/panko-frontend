@@ -61,11 +61,22 @@ export const useCalendarStore = defineStore('calendar', () => {
     }
     error.value = null
     try {
-      await calendarAPI.deleteScheduledRecipe(scheduledRecipeId)
+      const response = await calendarAPI.deleteScheduledRecipe(scheduledRecipeId)
+      console.log('Delete response:', response.status, response.data)
+      // Verify we got a successful response (status 200 and no error in response)
+      if (response.status !== 200) {
+        throw new Error(`Delete failed with status ${response.status}`)
+      }
+      if (response.data && response.data.error) {
+        throw new Error(response.data.error)
+      }
+      // Success - backend confirmed deletion
       if (!skipFetch) {
         await fetchScheduledRecipes()
       }
+      return response.data
     } catch (err) {
+      console.error('Delete error:', err)
       error.value = err.message || 'Failed to delete scheduled recipe'
       throw err
     } finally {
@@ -108,51 +119,63 @@ export const useCalendarStore = defineStore('calendar', () => {
       
       // Process in batches to avoid overwhelming the backend
       const BATCH_SIZE = 5
+      const results = []
       
-      // Process deletes in batches
+      // Process deletes in batches - wait for backend responses
       for (let i = 0; i < deletes.length; i += BATCH_SIZE) {
         const batch = deletes.slice(i, i + BATCH_SIZE)
-        await Promise.all(
+        const batchResults = await Promise.all(
           batch.map(update => 
-            deleteScheduledRecipe(update.scheduledRecipe, true).catch(err => {
+            deleteScheduledRecipe(update.scheduledRecipe, true).then(() => ({ success: true, update })).catch(err => {
               console.error('Failed to delete scheduled recipe:', err)
-              throw err
+              return { success: false, update, error: err }
             })
           )
         )
+        results.push(...batchResults)
       }
       
-      // Process adds in batches
+      // Process adds in batches - wait for backend responses
       for (let i = 0; i < adds.length; i += BATCH_SIZE) {
         const batch = adds.slice(i, i + BATCH_SIZE)
-        await Promise.all(
+        const batchResults = await Promise.all(
           batch.map(update => 
-            scheduleRecipe(update.recipe, update.date, true).catch(err => {
+            scheduleRecipe(update.recipe, update.date, true).then(() => ({ success: true, update })).catch(err => {
               console.error('Failed to schedule recipe:', err)
-              throw err
+              return { success: false, update, error: err }
             })
           )
         )
+        results.push(...batchResults)
       }
       
-      // Process moves in batches (each move is delete + add)
+      // Process moves in batches (each move is delete + add) - wait for backend responses
       for (let i = 0; i < moves.length; i += BATCH_SIZE) {
         const batch = moves.slice(i, i + BATCH_SIZE)
-        await Promise.all(
+        const batchResults = await Promise.all(
           batch.map(update => 
             Promise.all([
               deleteScheduledRecipe(update.oldScheduledRecipe, true),
               scheduleRecipe(update.recipe, update.newDate, true)
-            ]).catch(err => {
+            ]).then(() => ({ success: true, update })).catch(err => {
               console.error('Failed to move scheduled recipe:', err)
-              throw err
+              return { success: false, update, error: err }
             })
           )
         )
+        results.push(...batchResults)
       }
       
-      // Clear pending updates immediately after successful operations
-      // This updates the UI right away - do this BEFORE fetch to ensure UI updates
+      // Check if all operations succeeded
+      const failed = results.filter(r => !r.success)
+      if (failed.length > 0) {
+        const errorMessages = failed.map(f => f.error?.message || 'Unknown error').join(', ')
+        throw new Error(`Some operations failed: ${errorMessages}`)
+      }
+      
+      // Only clear pending updates after confirming all backend responses succeeded
+      // This ensures the backend has actually completed all operations
+      pendingUpdates.value.length = 0
       pendingUpdates.value = []
       
       // Try to fetch updated data, but don't fail if it times out

@@ -1831,6 +1831,7 @@ onMounted(() => {
   box-shadow: none;
   overflow: visible;
   background: transparent;
+  pointer-events: none;
 }
 
 .bookmark img {
@@ -1838,6 +1839,7 @@ onMounted(() => {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  pointer-events: auto;
 }
 
 .bookmark-bg,
