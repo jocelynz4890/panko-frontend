@@ -25,6 +25,7 @@
             <h1 
               v-if="!editMode"
               class="recipe-name"
+              :class="{ 'untitled-dish': (dish?.name || editableDishName || 'New Dish') === 'New Dish' }"
             >
               {{ dish?.name || editableDishName || 'New Dish' }}
             </h1>
@@ -778,30 +779,35 @@ async function saveRecipe() {
                         editableRecipe.value.subname.trim()
       
       if (hasContent) {
+        // Check if this will be the first recipe before creating
+        const wasFirstRecipe = sortedRecipes.value.length === 0
+        
         // Create new recipe
         const recipeId = await recipesStore.createRecipe({
           ...editableRecipe.value,
           dish: dishId
         })
         
-        // If this is the first recipe, set it as default
-        if (sortedRecipes.value.length === 0) {
-          await recipesStore.setDefaultRecipe(recipeId, dishId)
-        }
-        
-        // Reload recipes
+        // Reload recipes to get the newly created one
         await recipesStore.fetchRecipes(dishId)
+        
         // Update backup after fetching
         if (recipesStore.recipes.length > 0) {
           recipesBackup.value = [...recipesStore.recipes]
         }
+        
+        // If this was the first recipe, set it as default
+        if (wasFirstRecipe && recipeId) {
+          await recipesStore.setDefaultRecipe(recipeId, dishId)
+        }
+        
         // After creating, switch to the newly created recipe (it will be index 0 - newest)
         // Then prepare a new empty recipe tab
-        if (sortedRecipes.value.length > 0) {
+        if (recipesStore.recipes.length > 0) {
           // Switch to the newly created recipe (newest, index 0)
           currentRecipeIndex.value = 0
           isNewRecipe.value = false
-          loadRecipeData(sortedRecipes.value[0])
+          loadRecipeData(recipesStore.recipes[0])
         } else {
           // If no recipes loaded, stay in new recipe mode
           isNewRecipe.value = true
@@ -1343,12 +1349,19 @@ onMounted(() => {
   margin-bottom: 1.5rem;
 }
 
-.recipe-name {
+/* Dish name (h1) styling */
+.recipe-header .recipe-name {
   font-size: 2rem;
+  font-weight: 600;
   color: var(--color-dark-brown);
-  margin-bottom: 0.5rem;
-  border-bottom: 2px solid var(--color-light-brown);
-  padding-bottom: 0.5rem;
+  margin-bottom: 0;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.recipe-header .recipe-name.untitled-dish {
+  font-style: italic;
+  font-weight: 600;
 }
 
 .recipe-header-row {
@@ -1356,9 +1369,13 @@ onMounted(() => {
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
+  border-top: 2px solid var(--color-light-brown);
+  padding-top: 0.5rem;
+  margin-top: 0.5rem;
 }
 
-.recipe-name {
+/* Recipe subname (h2) styling */
+.recipe-header-row .recipe-name {
   font-size: 1.2rem;
   color: var(--color-medium-brown);
   font-weight: normal;

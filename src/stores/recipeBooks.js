@@ -31,8 +31,12 @@ export const useRecipeBooksStore = defineStore('recipeBooks', () => {
     error.value = null
     try {
       const response = await recipeBookAPI.getBook(bookId)
+      console.log('fetchBook response:', response.data)
       const books = response.data.books || response.data
-      currentBook.value = Array.isArray(books) ? books[0] : books
+      const book = Array.isArray(books) ? books[0] : books
+      console.log('Extracted book:', book)
+      console.log('Book dishes:', book?.dishes)
+      currentBook.value = book
       return currentBook.value
     } catch (err) {
       error.value = err.message || 'Failed to fetch recipe book'

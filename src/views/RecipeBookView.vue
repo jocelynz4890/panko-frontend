@@ -32,7 +32,11 @@
                   :key="dish._id"
                   class="recipe-entry"
                 >
-                  <div class="recipe-name" @click="openDish(dish._id)">
+                  <div 
+                    class="recipe-name" 
+                    :class="{ 'untitled-dish': dish.name === 'New Dish' }"
+                    @click="openDish(dish._id)"
+                  >
                     {{ dish.name }}
                   </div>
                   <div class="snapshots-list">
@@ -52,13 +56,17 @@
                 
                 <!-- Untitled Dishes -->
                 <div v-if="untitledDishes.length > 0" class="special-section">
-                  <div class="special-section-header">Untitled Recipes</div>
+                  <div class="special-section-header">Untitled Dishes</div>
                   <div
                     v-for="dish in untitledDishes"
                     :key="dish._id"
                     class="recipe-entry"
                   >
-                    <div class="recipe-name" @click="openDish(dish._id)">
+                    <div 
+                      class="recipe-name" 
+                      :class="{ 'untitled-dish': dish.name === 'New Dish' }"
+                      @click="openDish(dish._id)"
+                    >
                       {{ dish.name }}
                     </div>
                     <div class="snapshots-list">
@@ -82,7 +90,11 @@
                     :key="dish._id"
                     class="recipe-entry"
                   >
-                    <div class="recipe-name" @click="openDish(dish._id)">
+                    <div 
+                      class="recipe-name" 
+                      :class="{ 'untitled-dish': dish.name === 'New Dish' }"
+                      @click="openDish(dish._id)"
+                    >
                       {{ dish.name }}
                     </div>
                     <div class="snapshots-list">
@@ -157,7 +169,11 @@
                     class="dictionary-entry"
                   >
                     <div class="dictionary-recipe-line">
-                      <span class="dictionary-recipe-name" @click="openDish(dish._id)">
+                      <span 
+                        class="dictionary-recipe-name" 
+                        :class="{ 'untitled-dish': dish.name === 'New Dish' }"
+                        @click="openDish(dish._id)"
+                      >
                         {{ dish.name }}
                       </span>
                       <span class="dictionary-dots">................................................................................</span>
@@ -276,14 +292,14 @@ const sortedDishes = computed(() => {
 const regularDishes = computed(() => {
   return sortedDishes.value.filter(dish => {
     const recipes = getDishRecipes(dish._id)
-    return recipes.length > 0 && dish.name !== 'New Recipe'
+    return recipes.length > 0 && dish.name !== 'New Dish'
   })
 })
 
 const untitledDishes = computed(() => {
   return sortedDishes.value.filter(dish => {
     const recipes = getDishRecipes(dish._id)
-    return recipes.length > 0 && dish.name === 'New Recipe'
+    return recipes.length > 0 && dish.name === 'New Dish'
   })
 })
 
@@ -769,6 +785,11 @@ watch(() => route.query.refresh, () => {
   text-decoration: underline;
 }
 
+.recipe-name.untitled-dish {
+  font-style: italic;
+  font-weight: 500;
+}
+
 .snapshots-list {
   margin-left: 1.5rem;
   margin-top: 0.5rem;
@@ -951,20 +972,37 @@ watch(() => route.query.refresh, () => {
 }
 
 .bookmark img {
+  pointer-events: auto;
+}
+
+.bookmark img {
   position: absolute;
   width: 100%;
   height: 100%;
   object-fit: contain;
 }
 
-.bookmark-bg,
+.bookmark-bg {
+  z-index: 1;
+}
+
 .bookmark-bg-hover {
   z-index: 1;
 }
 
-.bookmark-overlay,
-.bookmark-overlay-hover {
+.bookmark-overlay {
   z-index: 2;
+  width: 50px !important;
+  height: 50px !important;
+  object-fit: contain;
+  opacity: 0.9;
+  left: 40%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.bookmark-overlay-hover {
+  z-index: 3;
   width: 50px !important;
   height: 50px !important;
   object-fit: contain;
@@ -985,19 +1023,72 @@ watch(() => route.query.refresh, () => {
   transition: opacity 0.2s;
 }
 
-.bookmark:hover .bookmark-bg {
+/* When hovering over any image in the bookmark, show hover state */
+/* Hover on background image */
+.bookmark .bookmark-bg:hover ~ .bookmark-bg {
   opacity: 0;
 }
 
-.bookmark:hover .bookmark-bg-hover {
+.bookmark .bookmark-bg:hover ~ .bookmark-bg-hover {
   opacity: 1;
 }
 
-.bookmark:hover .bookmark-overlay {
+.bookmark .bookmark-bg:hover ~ .bookmark-overlay {
   opacity: 0;
 }
 
-.bookmark:hover .bookmark-overlay-hover {
+.bookmark .bookmark-bg:hover ~ .bookmark-overlay-hover {
+  opacity: 0.9;
+}
+
+/* Hover on overlay image */
+.bookmark .bookmark-overlay:hover ~ .bookmark-bg {
+  opacity: 0;
+}
+
+.bookmark .bookmark-overlay:hover ~ .bookmark-bg-hover {
+  opacity: 1;
+}
+
+.bookmark .bookmark-overlay:hover {
+  opacity: 0;
+}
+
+.bookmark .bookmark-overlay:hover ~ .bookmark-overlay-hover {
+  opacity: 0.9;
+}
+
+/* Hover on hover background image - use parent to affect all siblings */
+.bookmark:has(.bookmark-bg-hover:hover) .bookmark-bg {
+  opacity: 0;
+}
+
+.bookmark:has(.bookmark-bg-hover:hover) .bookmark-bg-hover {
+  opacity: 1;
+}
+
+.bookmark:has(.bookmark-bg-hover:hover) .bookmark-overlay {
+  opacity: 0;
+}
+
+.bookmark:has(.bookmark-bg-hover:hover) .bookmark-overlay-hover {
+  opacity: 0.9;
+}
+
+/* Hover on hover overlay image - use parent to affect all siblings */
+.bookmark:has(.bookmark-overlay-hover:hover) .bookmark-bg {
+  opacity: 0;
+}
+
+.bookmark:has(.bookmark-overlay-hover:hover) .bookmark-bg-hover {
+  opacity: 1;
+}
+
+.bookmark:has(.bookmark-overlay-hover:hover) .bookmark-overlay {
+  opacity: 0;
+}
+
+.bookmark:has(.bookmark-overlay-hover:hover) .bookmark-overlay-hover {
   opacity: 0.9;
 }
 
@@ -1062,6 +1153,11 @@ watch(() => route.query.refresh, () => {
 .dictionary-recipe-name:hover {
   color: var(--color-medium-brown);
   text-decoration: underline;
+}
+
+.dictionary-recipe-name.untitled-dish {
+  font-style: italic;
+  font-weight: 400;
 }
 
 .dictionary-snapshot-name {

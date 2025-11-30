@@ -6,7 +6,7 @@
     </div>
     <div class="navbar-right">
       <button @click="$router.push('/')" class="nav-button">
-        <img src="/assets/home.png" alt="Home" class="nav-icon" />
+        <img src="/assets/home_navbar.png" alt="Home" class="nav-icon" />
         Home
       </button>
       <button @click="$router.push('/calendar')" class="nav-button">

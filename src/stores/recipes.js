@@ -105,7 +105,8 @@ export const useRecipesStore = defineStore('recipes', () => {
         recipeData.ranking || 1,
         recipeData.dish
       )
-      const recipeId = response.data.recipe
+      const recipe = response.data.recipe
+      const recipeId = recipe?._id || recipe
       
       // Add recipe to dish if not already added
       if (recipeData.dish) {
@@ -151,12 +152,17 @@ export const useRecipesStore = defineStore('recipes', () => {
     loading.value = true
     error.value = null
     try {
-      await dishesAPI.setDefaultRecipe(recipeId, dishId)
+      const response = await dishesAPI.setDefaultRecipe(recipeId, dishId)
+      const updatedDish = response.data.dish?._id ? response.data.dish : response.data.dish
       // Update the defaultRecipe field locally without full reload
       // Only update if currentDish exists and matches - be careful not to trigger reloads
       if (currentDish.value && currentDish.value._id === dishId) {
         // Use Object.assign to update the field without replacing the object
-        Object.assign(currentDish.value, { defaultRecipe: recipeId })
+        if (updatedDish && updatedDish.defaultRecipe) {
+          Object.assign(currentDish.value, { defaultRecipe: updatedDish.defaultRecipe })
+        } else {
+          Object.assign(currentDish.value, { defaultRecipe: recipeId })
+        }
       }
       // Don't call fetchDish - just update the field to avoid clearing recipes/view
     } catch (err) {

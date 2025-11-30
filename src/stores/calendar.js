@@ -32,34 +32,46 @@ export const useCalendarStore = defineStore('calendar', () => {
     }
   }
 
-  async function scheduleRecipe(recipeId, date) {
+  async function scheduleRecipe(recipeId, date, skipFetch = false) {
     if (!authStore.token) return null
     
-    loading.value = true
+    if (!skipFetch) {
+      loading.value = true
+    }
     error.value = null
     try {
       const response = await calendarAPI.assignRecipeToDate(null, recipeId, date)
-      await fetchScheduledRecipes()
+      if (!skipFetch) {
+        await fetchScheduledRecipes()
+      }
       return response.data.scheduledRecipe
     } catch (err) {
       error.value = err.message || 'Failed to schedule recipe'
       throw err
     } finally {
-      loading.value = false
+      if (!skipFetch) {
+        loading.value = false
+      }
     }
   }
 
-  async function deleteScheduledRecipe(scheduledRecipeId) {
-    loading.value = true
+  async function deleteScheduledRecipe(scheduledRecipeId, skipFetch = false) {
+    if (!skipFetch) {
+      loading.value = true
+    }
     error.value = null
     try {
       await calendarAPI.deleteScheduledRecipe(scheduledRecipeId)
-      await fetchScheduledRecipes()
+      if (!skipFetch) {
+        await fetchScheduledRecipes()
+      }
     } catch (err) {
       error.value = err.message || 'Failed to delete scheduled recipe'
       throw err
     } finally {
-      loading.value = false
+      if (!skipFetch) {
+        loading.value = false
+      }
     }
   }
 
@@ -77,19 +89,20 @@ export const useCalendarStore = defineStore('calendar', () => {
     loading.value = true
     error.value = null
     try {
-      // Process all pending updates
+      // Process all pending updates without fetching after each one
       for (const update of pendingUpdates.value) {
         if (update.type === 'add') {
-          await scheduleRecipe(update.recipe, update.date)
+          await scheduleRecipe(update.recipe, update.date, true)
         } else if (update.type === 'delete') {
-          await deleteScheduledRecipe(update.scheduledRecipe)
+          await deleteScheduledRecipe(update.scheduledRecipe, true)
         } else if (update.type === 'move') {
           // Delete old and create new
-          await deleteScheduledRecipe(update.oldScheduledRecipe)
-          await scheduleRecipe(update.recipe, update.newDate)
+          await deleteScheduledRecipe(update.oldScheduledRecipe, true)
+          await scheduleRecipe(update.recipe, update.newDate, true)
         }
       }
       clearPendingUpdates()
+      // Only fetch once at the end
       await fetchScheduledRecipes()
     } catch (err) {
       error.value = err.message || 'Failed to submit updates'
