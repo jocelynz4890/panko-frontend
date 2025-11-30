@@ -35,17 +35,17 @@
               @dragstart="handleDragStart($event, scheduled)"
               @dragend="handleDragEnd($event)"
               @click.stop="handleScheduledClick($event, scheduled.scheduledRecipe._id)"
-              :title="`${scheduled.recipeName} - ${scheduled.snapshotName || 'Default'}`"
+              :title="`${scheduled.dishName} - ${scheduled.recipeName || 'Default'}`"
             >
-              <div class="scheduled-recipe-name">{{ scheduled.recipeName }}</div>
-              <div class="scheduled-snapshot-name">{{ scheduled.snapshotName || 'Default' }}</div>
+              <div class="scheduled-recipe-name">{{ scheduled.dishName }}</div>
+              <div class="scheduled-snapshot-name">{{ scheduled.recipeName || 'Default' }}</div>
               <div class="remove-hint">click to remove</div>
             </div>
             <div
               v-if="getScheduledForDay(day.date).length === 0"
               class="empty-day"
             >
-              Drop snapshots here
+              Drop recipes here
             </div>
           </div>
           </div>
@@ -53,26 +53,26 @@
       </div>
       </div>
     
-      <!-- Snapshot Selection Panel -->
-      <div class="snapshot-panel" ref="snapshotPanelRef" :style="{ height: snapshotPanelHeight }">
-        <h3>Add Snapshot to Calendar</h3>
-        <div v-if="availableSnapshots.length === 0" class="no-snapshots">
-          No snapshots available. Create snapshots in your recipes first.
+      <!-- Recipe Selection Panel -->
+      <div class="snapshot-panel" ref="recipePanelRef" :style="{ height: recipePanelHeight }">
+        <h3>Add Recipe to Calendar</h3>
+        <div v-if="availableRecipes.length === 0" class="no-snapshots">
+          No recipes available. Create recipes in your dishes first.
         </div>
         <div v-else class="snapshot-list">
           <div
-            v-for="snapshot in availableSnapshots"
-            :key="snapshot._id"
+            v-for="recipe in availableRecipes"
+            :key="recipe._id"
             class="snapshot-option"
             draggable="true"
-            @dragstart="handleDragStartSnapshot($event, snapshot)"
+            @dragstart="handleDragStartRecipe($event, recipe)"
             @dragend="handleDragEnd"
-            :title="`Drag to calendar to schedule: ${snapshot.recipeName} - ${snapshot.name || 'Default'}`"
+            :title="`Drag to calendar to schedule: ${recipe.dishName} - ${recipe.name || 'Default'}`"
           >
-            <div class="snapshot-option-recipe">{{ snapshot.recipeName }}</div>
-            <div class="snapshot-option-name">{{ snapshot.name || formatDateShort(snapshot.date) || 'Default' }}</div>
-            <div class="snapshot-option-date" v-if="snapshot.date">
-              {{ formatDateShort(snapshot.date) }}
+            <div class="snapshot-option-recipe">{{ recipe.dishName }}</div>
+            <div class="snapshot-option-name">{{ recipe.name || formatDateShort(recipe.date) || 'Default' }}</div>
+            <div class="snapshot-option-date" v-if="recipe.date">
+              {{ formatDateShort(recipe.date) }}
             </div>
           </div>
         </div>
@@ -115,12 +115,12 @@ const draggedRecipe = ref(null)
 const loading = ref(false)
 const error = ref('')
 const submitting = ref(false)
-const availableSnapshots = ref([])
+const availableRecipes = ref([])
 const scheduledRecipesData = ref([])
 const isDragging = ref(false) // Track if we're currently dragging to prevent click events
 const calendarWrapperRef = ref(null)
-const snapshotPanelRef = ref(null)
-const snapshotPanelHeight = ref('auto')
+const recipePanelRef = ref(null)
+const recipePanelHeight = ref('auto')
 
 const currentMonthYear = computed(() => {
   return currentDate.value.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
@@ -192,54 +192,54 @@ async function loadData() {
     // Load scheduled recipes
     await calendarStore.fetchScheduledRecipes()
     
-    // Load all recipe books and their recipes
+    // Load all recipe books and their dishes
     await recipeBooksStore.fetchBooks()
     
-    // Load all snapshots from all recipes
-    const allSnapshots = []
+    // Load all recipes from all dishes
+    const allRecipes = []
     for (const book of recipeBooksStore.books) {
-      if (book.recipes && book.recipes.length > 0) {
-        for (const recipeId of book.recipes) {
+      if (book.dishes && book.dishes.length > 0) {
+        for (const dishId of book.dishes) {
           try {
-            // Always fetch fresh recipe data
-            if (recipesStore.currentRecipe?._id === recipeId) {
-              recipesStore.currentRecipe = null
+            // Always fetch fresh dish data
+            if (recipesStore.currentDish?._id === dishId) {
+              recipesStore.currentDish = null
             }
-            await recipesStore.fetchRecipe(recipeId)
-            const recipe = recipesStore.currentRecipe
-            if (recipe && recipe.snapshots && recipe.snapshots.length > 0) {
-              // Fetch all snapshots for this recipe
-              await recipesStore.fetchSnapshots(recipeId)
+            await recipesStore.fetchDish(dishId)
+            const dish = recipesStore.currentDish
+            if (dish && dish.recipes && dish.recipes.length > 0) {
+              // Fetch all recipes for this dish
+              await recipesStore.fetchRecipes(dishId)
               
-              // Add each snapshot to the list
-              for (const snapshot of recipesStore.snapshots) {
-                allSnapshots.push({
-                  _id: snapshot._id,
-                  recipeId: recipe._id,
-                  recipeName: recipe.name,
-                  name: snapshot.subname || null,
-                  date: snapshot.date || null
+              // Add each recipe to the list
+              for (const recipe of recipesStore.recipes) {
+                allRecipes.push({
+                  _id: recipe._id,
+                  dishId: dish._id,
+                  dishName: dish.name,
+                  name: recipe.subname || null,
+                  date: recipe.date || null
                 })
               }
             }
           } catch (err) {
-            console.error(`Failed to load recipe ${recipeId}:`, err)
+            console.error(`Failed to load dish ${dishId}:`, err)
           }
         }
       }
     }
-    // Sort snapshots by date (newest first)
-    allSnapshots.sort((a, b) => {
+    // Sort recipes by date (newest first)
+    allRecipes.sort((a, b) => {
       const dateA = a.date ? new Date(a.date) : new Date(0)
       const dateB = b.date ? new Date(b.date) : new Date(0)
       return dateB - dateA
     })
-    availableSnapshots.value = allSnapshots
+    availableRecipes.value = allRecipes
     
-    // Build scheduled recipes data with recipe names
+    // Build scheduled recipes data with dish names
     scheduledRecipesData.value = []
     
-    // Match scheduled snapshots to our loaded snapshots
+    // Match scheduled recipes to our loaded recipes
     for (const scheduled of calendarStore.scheduledRecipes) {
       // Normalize date to YYYY-MM-DD format
       let normalizedDate = scheduled.date
@@ -249,47 +249,47 @@ async function loadData() {
         normalizedDate = scheduled.date.split('T')[0]
       }
       
-      // Find the snapshot in our loaded snapshots
-      const snapshot = allSnapshots.find(s => s._id === scheduled.snapshot)
+      // Find the recipe in our loaded recipes
+      const recipe = allRecipes.find(r => r._id === scheduled.recipe)
       
-      if (snapshot) {
+      if (recipe) {
         scheduledRecipesData.value.push({
           scheduledRecipe: scheduled,
-          recipeName: snapshot.recipeName,
-          snapshotName: snapshot.name || 'Default',
+          dishName: recipe.dishName,
+          recipeName: recipe.name || 'Default',
           date: normalizedDate,
-          snapshot: scheduled.snapshot
+          recipe: scheduled.recipe
         })
       } else {
-        // If snapshot not found, mark for lookup
+        // If recipe not found, mark for lookup
         scheduledRecipesData.value.push({
           scheduledRecipe: scheduled,
-          recipeName: 'Loading...',
-          snapshotName: null,
+          dishName: 'Loading...',
+          recipeName: null,
           date: normalizedDate,
-          snapshot: scheduled.snapshot,
+          recipe: scheduled.recipe,
           needsLookup: true
         })
       }
     }
     
-    // Lookup snapshots that weren't found in the initial load
+    // Lookup recipes that weren't found in the initial load
     for (const item of scheduledRecipesData.value) {
       if (item.needsLookup) {
-        // Search through recipe books to find this snapshot
+        // Search through recipe books to find this recipe
         let found = false
         for (const book of recipeBooksStore.books) {
-          if (book.recipes && book.recipes.length > 0) {
-            for (const recipeId of book.recipes) {
+          if (book.dishes && book.dishes.length > 0) {
+            for (const dishId of book.dishes) {
               try {
-                await recipesStore.fetchSnapshots(recipeId)
-                const snapshot = recipesStore.snapshots.find(s => s._id === item.snapshot)
-                if (snapshot) {
-                  await recipesStore.fetchRecipe(recipeId)
-                  const recipe = recipesStore.currentRecipe
-                  if (recipe) {
-                    item.recipeName = recipe.name
-                    item.snapshotName = snapshot.subname || 'Untitled'
+                await recipesStore.fetchRecipes(dishId)
+                const recipe = recipesStore.recipes.find(r => r._id === item.recipe)
+                if (recipe) {
+                  await recipesStore.fetchDish(dishId)
+                  const dish = recipesStore.currentDish
+                  if (dish) {
+                    item.dishName = dish.name
+                    item.recipeName = recipe.subname || 'Untitled'
                     found = true
                     break
                   }
@@ -302,8 +302,8 @@ async function loadData() {
           }
         }
         if (!found) {
+          item.dishName = 'Unknown Dish'
           item.recipeName = 'Unknown Recipe'
-          item.snapshotName = 'Unknown Snapshot'
         }
         delete item.needsLookup
       }
@@ -312,7 +312,7 @@ async function loadData() {
     error.value = err.message || 'Failed to load calendar data'
   } finally {
     loading.value = false
-    updateSnapshotPanelHeight()
+    updateRecipePanelHeight()
   }
 }
 
@@ -326,7 +326,7 @@ function handleDragStart(event, scheduled) {
   const dragData = {
     type: 'scheduled',
     scheduledId: scheduled.scheduledRecipe._id,
-    snapshot: scheduled.snapshot,
+    recipe: scheduled.recipe,
     currentDate: scheduled.date
   }
   event.dataTransfer.setData('application/json', JSON.stringify(dragData))
@@ -334,25 +334,25 @@ function handleDragStart(event, scheduled) {
   console.log('Drag data set:', dragData)
 }
 
-function handleDragStartSnapshot(event, snapshot) {
-  console.log('Drag started for snapshot:', snapshot)
+function handleDragStartRecipe(event, recipe) {
+  console.log('Drag started for recipe:', recipe)
   try {
-    draggedRecipe.value = snapshot
+    draggedRecipe.value = recipe
     event.dataTransfer.effectAllowed = 'copy'
-    // Store snapshot data in dataTransfer for reliable access during drop
+    // Store recipe data in dataTransfer for reliable access during drop
     const dragData = {
-      type: 'snapshot',
-      snapshotId: snapshot._id,
-      recipeId: snapshot.recipeId,
-      recipeName: snapshot.recipeName,
-      snapshotName: snapshot.name || 'Default',
-      date: snapshot.date
+      type: 'recipe',
+      recipeId: recipe._id,
+      dishId: recipe.dishId,
+      dishName: recipe.dishName,
+      recipeName: recipe.name || 'Default',
+      date: recipe.date
     }
     event.dataTransfer.setData('application/json', JSON.stringify(dragData))
-    event.dataTransfer.setData('text/plain', 'snapshot') // Fallback for some browsers
+    event.dataTransfer.setData('text/plain', 'recipe') // Fallback for some browsers
     console.log('Drag data stored:', dragData)
   } catch (error) {
-    console.error('Error in handleDragStartSnapshot:', error)
+    console.error('Error in handleDragStartRecipe:', error)
     event.preventDefault()
   }
 }
@@ -395,17 +395,17 @@ async function handleDrop(event, date) {
       dragData = {
         type: 'scheduled',
         scheduledId: draggedItem.value.scheduledRecipe._id,
-        snapshot: draggedItem.value.snapshot,
+        recipe: draggedItem.value.recipe,
         currentDate: draggedItem.value.date
       }
     } else if (draggedRecipe.value) {
-      console.log('Using draggedRecipe ref (snapshot)')
+      console.log('Using draggedRecipe ref (recipe)')
       dragData = {
-        type: 'snapshot',
-        snapshotId: draggedRecipe.value._id,
-        recipeId: draggedRecipe.value.recipeId,
-        recipeName: draggedRecipe.value.recipeName,
-        snapshotName: draggedRecipe.value.name || 'Default',
+        type: 'recipe',
+        recipeId: draggedRecipe.value._id,
+        dishId: draggedRecipe.value.dishId,
+        dishName: draggedRecipe.value.dishName,
+        recipeName: draggedRecipe.value.name || 'Default',
         date: draggedRecipe.value.date
       }
     }
@@ -438,7 +438,7 @@ async function handleDrop(event, date) {
         calendarStore.addPendingUpdate({
           type: 'move',
           oldScheduledRecipe: dragData.scheduledId,
-          snapshot: dragData.snapshot,
+          recipe: dragData.recipe,
           newDate: newDateNormalized,
           date: oldDateNormalized // Keep track of old date
         })
@@ -458,17 +458,17 @@ async function handleDrop(event, date) {
         }
       }
     }
-  } else if (dragData.type === 'snapshot' || dragData.type === 'recipe') {
-    // Adding new snapshot (or legacy recipe with default snapshot)
-    const snapshotId = dragData.type === 'snapshot' ? dragData.snapshotId : dragData.defaultSnapshot
+  } else if (dragData.type === 'recipe') {
+    // Adding new recipe
+    const recipeId = dragData.recipeId
+    const dishName = dragData.dishName
     const recipeName = dragData.recipeName
-    const snapshotName = dragData.type === 'snapshot' ? dragData.snapshotName : dragData.defaultSnapshotName
     
-    if (snapshotId) {
-      console.log('Dropping snapshot:', dragData, 'on date:', date)
+    if (recipeId) {
+      console.log('Dropping recipe:', dragData, 'on date:', date)
       calendarStore.addPendingUpdate({
         type: 'add',
-        snapshot: snapshotId,
+        recipe: recipeId,
         date: date
       })
       
@@ -476,23 +476,23 @@ async function handleDrop(event, date) {
       const newScheduledItem = {
         scheduledRecipe: { 
           _id: 'pending-' + Date.now(), 
-          snapshot: snapshotId, 
+          recipe: recipeId, 
           date: date
         },
-        recipeName: recipeName,
-        snapshotName: snapshotName || null,
+        dishName: dishName,
+        recipeName: recipeName || null,
         date: date,
-        snapshot: snapshotId
+        recipe: recipeId
       }
       scheduledRecipesData.value.push(newScheduledItem)
       
       // Force reactivity update
       scheduledRecipesData.value = [...scheduledRecipesData.value]
       
-      console.log('Added snapshot to calendar day:', date)
+      console.log('Added recipe to calendar day:', date)
       console.log('All scheduled items:', scheduledRecipesData.value)
     } else {
-      console.warn('No snapshot ID available:', dragData)
+      console.warn('No recipe ID available:', dragData)
       error.value = `Unable to schedule. Please try again.`
       setTimeout(() => { error.value = '' }, 5000)
     }
@@ -605,22 +605,22 @@ function clearPendingUpdates() {
   }
 }
 
-function updateSnapshotPanelHeight() {
+function updateRecipePanelHeight() {
   nextTick(() => {
-    if (calendarWrapperRef.value && snapshotPanelRef.value) {
+    if (calendarWrapperRef.value && recipePanelRef.value) {
       const calendarHeight = calendarWrapperRef.value.offsetHeight
-      snapshotPanelHeight.value = `${calendarHeight}px`
+      recipePanelHeight.value = `${calendarHeight}px`
     }
   })
 }
 
 onMounted(() => {
   loadData()
-  updateSnapshotPanelHeight()
+  updateRecipePanelHeight()
 })
 
 watch(() => currentDate.value, () => {
-  updateSnapshotPanelHeight()
+  updateRecipePanelHeight()
 })
 
 // Reload data when navigating to this route (in case recipes were updated)
@@ -628,7 +628,7 @@ watch(() => route.path, (newPath, oldPath) => {
   if (newPath === '/calendar' && oldPath && oldPath !== newPath) {
     console.log('Calendar route activated - reloading data to get latest recipe defaults')
     loadData()
-    updateSnapshotPanelHeight()
+    updateRecipePanelHeight()
   }
 })
 
@@ -636,7 +636,7 @@ watch(() => route.path, (newPath, oldPath) => {
 onActivated(() => {
   console.log('Calendar component activated - reloading data to get latest recipe defaults')
   loadData()
-  updateSnapshotPanelHeight()
+  updateRecipePanelHeight()
 })
 </script>
 

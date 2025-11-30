@@ -22,77 +22,77 @@
               <div class="contents-header">
                 <h2 class="page-title">Table of Contents</h2>
               </div>
-              <div v-if="sortedRecipes.length === 0" class="empty-state">
-                No recipes yet. Add recipes to this book to see them here.
+              <div v-if="sortedDishes.length === 0" class="empty-state">
+                No dishes yet. Add dishes to this book to see them here.
               </div>
               <div v-else class="contents-list">
-                <!-- Regular recipes -->
+                <!-- Regular dishes -->
                 <div
-                  v-for="recipe in regularRecipes"
-                  :key="recipe._id"
+                  v-for="dish in regularDishes"
+                  :key="dish._id"
                   class="recipe-entry"
                 >
-                  <div class="recipe-name" @click="openRecipe(recipe._id)">
-                    {{ recipe.name }}
+                  <div class="recipe-name" @click="openDish(dish._id)">
+                    {{ dish.name }}
                   </div>
                   <div class="snapshots-list">
                     <div
-                      v-for="snapshot in getRecipeSnapshots(recipe._id)"
-                      :key="snapshot._id"
+                      v-for="recipe in getDishRecipes(dish._id)"
+                      :key="recipe._id"
                       class="snapshot-entry"
-                      @click="openRecipe(recipe._id, snapshot._id)"
+                      @click="openDish(dish._id, recipe._id)"
                     >
-                      {{ snapshot.subname || 'Untitled Snapshot' }}
+                      {{ recipe.subname || 'Untitled Recipe' }}
                     </div>
                   </div>
                 </div>
                 
                 <!-- Divider before special sections -->
-                <div v-if="untitledRecipes.length > 0 || noSnapshotRecipes.length > 0" class="contents-divider"></div>
+                <div v-if="untitledDishes.length > 0 || noRecipeDishes.length > 0" class="contents-divider"></div>
                 
-                <!-- Untitled Recipes -->
-                <div v-if="untitledRecipes.length > 0" class="special-section">
+                <!-- Untitled Dishes -->
+                <div v-if="untitledDishes.length > 0" class="special-section">
                   <div class="special-section-header">Untitled Recipes</div>
                   <div
-                    v-for="recipe in untitledRecipes"
-                    :key="recipe._id"
+                    v-for="dish in untitledDishes"
+                    :key="dish._id"
                     class="recipe-entry"
                   >
-                    <div class="recipe-name" @click="openRecipe(recipe._id)">
-                      {{ recipe.name }}
+                    <div class="recipe-name" @click="openDish(dish._id)">
+                      {{ dish.name }}
                     </div>
                     <div class="snapshots-list">
                       <div
-                        v-for="snapshot in getRecipeSnapshots(recipe._id)"
-                        :key="snapshot._id"
+                        v-for="recipe in getDishRecipes(dish._id)"
+                        :key="recipe._id"
                         class="snapshot-entry"
-                        @click="openRecipe(recipe._id, snapshot._id)"
+                        @click="openDish(dish._id, recipe._id)"
                       >
-                        {{ snapshot.subname || 'Untitled Snapshot' }}
+                        {{ recipe.subname || 'Untitled Recipe' }}
                       </div>
                     </div>
                   </div>
                 </div>
                 
-                <!-- No Recipe (recipes with no snapshots) -->
-                <div v-if="noSnapshotRecipes.length > 0" class="special-section">
+                <!-- No Recipe (dishes with no recipes) -->
+                <div v-if="noRecipeDishes.length > 0" class="special-section">
                   <div class="special-section-header">No Recipe</div>
                   <div
-                    v-for="recipe in noSnapshotRecipes"
-                    :key="recipe._id"
+                    v-for="dish in noRecipeDishes"
+                    :key="dish._id"
                     class="recipe-entry"
                   >
-                    <div class="recipe-name" @click="openRecipe(recipe._id)">
-                      {{ recipe.name }}
+                    <div class="recipe-name" @click="openDish(dish._id)">
+                      {{ dish.name }}
                     </div>
                     <div class="snapshots-list">
                       <div
-                        v-for="snapshot in getRecipeSnapshots(recipe._id)"
-                        :key="snapshot._id"
+                        v-for="recipe in getDishRecipes(dish._id)"
+                        :key="recipe._id"
                         class="snapshot-entry"
-                        @click="openRecipe(recipe._id, snapshot._id)"
+                        @click="openDish(dish._id, recipe._id)"
                       >
-                        {{ snapshot.subname || 'Untitled Snapshot' }}
+                        {{ recipe.subname || 'Untitled Recipe' }}
                       </div>
                     </div>
                   </div>
@@ -123,15 +123,15 @@
                 </div>
                 <div class="recipes-by-rating">
                   <div
-                    v-for="recipe in getRecipesByRating(rating)"
-                    :key="recipe._id"
+                    v-for="dish in getDishesByRating(rating)"
+                    :key="dish._id"
                     class="recipe-link"
-                    @click="openRecipe(recipe._id)"
+                    @click="openDish(dish._id)"
                   >
-                    {{ recipe.name }}
+                    {{ dish.name }}
                   </div>
-                  <div v-if="getRecipesByRating(rating).length === 0" class="no-recipes">
-                    No recipes with this rating
+                  <div v-if="getDishesByRating(rating).length === 0" class="no-recipes">
+                    No dishes with this rating
                   </div>
                 </div>
               </div>
@@ -141,8 +141,8 @@
           <div class="page right-page" :class="{ 'page-flipped': currentPage > 0 }">
             <!-- Right page content -->
             <div v-if="currentView === 'contents'" class="dictionary-view">
-              <div v-if="sortedRecipes.length === 0" class="empty-state">
-                No recipes yet.
+              <div v-if="sortedDishes.length === 0" class="empty-state">
+                No dishes yet.
               </div>
               <div v-else>
                 <div
@@ -152,26 +152,26 @@
                 >
                   <div class="dictionary-letter">{{ group.letter }}</div>
                   <div
-                    v-for="recipe in group.recipes"
-                    :key="recipe._id"
+                    v-for="dish in group.dishes"
+                    :key="dish._id"
                     class="dictionary-entry"
                   >
                     <div class="dictionary-recipe-line">
-                      <span class="dictionary-recipe-name" @click="openRecipe(recipe._id)">
-                        {{ recipe.name }}
+                      <span class="dictionary-recipe-name" @click="openDish(dish._id)">
+                        {{ dish.name }}
                       </span>
                       <span class="dictionary-dots">................................................................................</span>
-                      <span class="dictionary-date">{{ getRecipeDate(recipe._id) }}</span>
+                      <span class="dictionary-date">{{ getDishDate(dish._id) }}</span>
                     </div>
                     <div
-                      v-for="snapshot in getRecipeSnapshots(recipe._id)"
-                      :key="snapshot._id"
+                      v-for="recipe in getDishRecipes(dish._id)"
+                      :key="recipe._id"
                       class="dictionary-snapshot-line"
-                      @click="openRecipe(recipe._id, snapshot._id)"
+                      @click="openDish(dish._id, recipe._id)"
                     >
-                      <span class="dictionary-snapshot-name">{{ snapshot.subname || 'Untitled Snapshot' }}</span>
+                      <span class="dictionary-snapshot-name">{{ recipe.subname || 'Untitled Recipe' }}</span>
                       <span class="dictionary-dots">................................................................................</span>
-                      <span class="dictionary-date">{{ formatSnapshotDate(snapshot.date) }}</span>
+                      <span class="dictionary-date">{{ formatRecipeDate(recipe.date) }}</span>
                     </div>
                   </div>
                 </div>
@@ -187,15 +187,15 @@
                 </div>
                 <div class="recipes-by-rating">
                   <div
-                    v-for="recipe in getUnrankedRecipes()"
-                    :key="recipe._id"
+                    v-for="dish in getUnrankedDishes()"
+                    :key="dish._id"
                     class="recipe-link"
-                    @click="openRecipe(recipe._id)"
+                    @click="openDish(dish._id)"
                   >
-                    {{ recipe.name }}
+                    {{ dish.name }}
                   </div>
-                  <div v-if="getUnrankedRecipes().length === 0" class="no-recipes">
-                    No unranked recipes
+                  <div v-if="getUnrankedDishes().length === 0" class="no-recipes">
+                    No unranked dishes
                   </div>
                 </div>
               </div>
@@ -251,8 +251,8 @@ const recipesStore = useRecipesStore()
 const authStore = useAuthStore()
 
 const book = ref(null)
-const recipes = ref([])
-const snapshotsByRecipe = ref({}) // Map of recipeId -> snapshots array
+const dishes = ref([])
+const recipesByDish = ref({}) // Map of dishId -> recipes array
 const loading = ref(false)
 const error = ref('')
 const currentView = ref('contents')
@@ -268,29 +268,29 @@ onMounted(() => {
   loadBookData()
 })
 
-const sortedRecipes = computed(() => {
-  return [...recipes.value].sort((a, b) => a.name.localeCompare(b.name))
+const sortedDishes = computed(() => {
+  return [...dishes.value].sort((a, b) => a.name.localeCompare(b.name))
 })
 
-// Categorized recipes for table of contents
-const regularRecipes = computed(() => {
-  return sortedRecipes.value.filter(recipe => {
-    const snapshots = getRecipeSnapshots(recipe._id)
-    return snapshots.length > 0 && recipe.name !== 'New Recipe'
+// Categorized dishes for table of contents
+const regularDishes = computed(() => {
+  return sortedDishes.value.filter(dish => {
+    const recipes = getDishRecipes(dish._id)
+    return recipes.length > 0 && dish.name !== 'New Recipe'
   })
 })
 
-const untitledRecipes = computed(() => {
-  return sortedRecipes.value.filter(recipe => {
-    const snapshots = getRecipeSnapshots(recipe._id)
-    return snapshots.length > 0 && recipe.name === 'New Recipe'
+const untitledDishes = computed(() => {
+  return sortedDishes.value.filter(dish => {
+    const recipes = getDishRecipes(dish._id)
+    return recipes.length > 0 && dish.name === 'New Recipe'
   })
 })
 
-const noSnapshotRecipes = computed(() => {
-  return sortedRecipes.value.filter(recipe => {
-    const snapshots = getRecipeSnapshots(recipe._id)
-    return snapshots.length === 0
+const noRecipeDishes = computed(() => {
+  return sortedDishes.value.filter(dish => {
+    const recipes = getDishRecipes(dish._id)
+    return recipes.length === 0
   })
 })
 
@@ -298,12 +298,12 @@ const noSnapshotRecipes = computed(() => {
 const dictionaryGroups = computed(() => {
   const groups = {}
   
-  sortedRecipes.value.forEach(recipe => {
-    const firstLetter = recipe.name.charAt(0).toUpperCase()
+  sortedDishes.value.forEach(dish => {
+    const firstLetter = dish.name.charAt(0).toUpperCase()
     if (!groups[firstLetter]) {
       groups[firstLetter] = []
     }
-    groups[firstLetter].push(recipe)
+    groups[firstLetter].push(dish)
   })
   
   // Convert to array and sort by letter
@@ -311,24 +311,24 @@ const dictionaryGroups = computed(() => {
     .sort()
     .map(letter => ({
       letter,
-      recipes: groups[letter]
+      dishes: groups[letter]
     }))
 })
 
-function getRecipeDate(recipeId) {
-  const recipe = recipes.value.find(r => r._id === recipeId)
-  if (!recipe) return ''
+function getDishDate(dishId) {
+  const dish = dishes.value.find(d => d._id === dishId)
+  if (!dish) return ''
   
-  // Get the most recent snapshot date, or empty if no snapshots
-  const snapshots = getRecipeSnapshots(recipeId)
-  if (snapshots.length === 0) return ''
+  // Get the most recent recipe date, or empty if no recipes
+  const recipes = getDishRecipes(dishId)
+  if (recipes.length === 0) return ''
   
-  // Get the most recent snapshot (they're sorted chronologically, oldest first)
-  const mostRecent = snapshots[snapshots.length - 1]
-  return formatSnapshotDate(mostRecent.date)
+  // Get the most recent recipe (they're sorted chronologically, oldest first)
+  const mostRecent = recipes[recipes.length - 1]
+  return formatRecipeDate(mostRecent.date)
 }
 
-function formatSnapshotDate(dateString) {
+function formatRecipeDate(dateString) {
   if (!dateString) return ''
   const date = new Date(dateString)
   if (isNaN(date.getTime())) return ''
@@ -351,46 +351,67 @@ async function loadBookData() {
   
   try {
     const bookId = route.params.id
-    // Clear existing recipes and snapshots first to force reload
-    recipes.value = []
-    snapshotsByRecipe.value = {}
+    // Clear existing dishes and recipes first to force reload
+    dishes.value = []
+    recipesByDish.value = {}
     
     // Always fetch fresh book data (no caching)
     book.value = await recipeBooksStore.fetchBook(bookId)
+    console.log('Loaded book:', book.value)
+    console.log('Book dishes:', book.value?.dishes)
+    console.log('Book recipes (old):', book.value?.recipes)
     
-    // Load all recipes for this book
-    if (book.value?.recipes?.length > 0) {
-      // Load recipes and their snapshots
-      for (const recipeId of book.value.recipes) {
+    // Load all dishes for this book
+    // Check both dishes and recipes (in case API still returns recipes)
+    const dishIds = book.value?.dishes || book.value?.recipes || []
+    console.log('Dish IDs to load:', dishIds)
+    
+    if (dishIds.length > 0) {
+      // Load dishes and their recipes
+      for (const dishId of dishIds) {
         try {
-          // Fetch fresh recipe data
-          await recipesStore.fetchRecipe(recipeId)
-          const recipe = recipesStore.currentRecipe
-          if (recipe) {
+          console.log(`Loading dish ${dishId}...`)
+          // Fetch fresh dish data
+          await recipesStore.fetchDish(dishId)
+          const dish = recipesStore.currentDish
+          console.log(`Loaded dish ${dishId}:`, dish)
+          
+          if (dish) {
             // Create a deep copy to avoid reactivity issues
-            recipes.value.push({
-              _id: recipe._id,
-              name: recipe.name,
-              description: recipe.description,
-              snapshots: recipe.snapshots ? [...recipe.snapshots] : [],
-              defaultSnapshot: recipe.defaultSnapshot
+            dishes.value.push({
+              _id: dish._id,
+              name: dish.name,
+              description: dish.description,
+              recipes: dish.recipes ? [...dish.recipes] : [],
+              defaultRecipe: dish.defaultRecipe
             })
+            console.log(`Added dish to list. Total dishes: ${dishes.value.length}`)
             
-            // Load snapshots for this recipe and store them per recipe
-            if (recipe.snapshots?.length > 0) {
-              await recipesStore.fetchSnapshots(recipeId)
-              // Store snapshots for this specific recipe
-              snapshotsByRecipe.value[recipeId] = [...recipesStore.snapshots]
+            // Load recipes for this dish and store them per dish
+            if (dish.recipes?.length > 0) {
+              console.log(`Loading recipes for dish ${dishId}...`)
+              await recipesStore.fetchRecipes(dishId)
+              console.log(`Loaded ${recipesStore.recipes.length} recipes for dish ${dishId}`)
+              // Store recipes for this specific dish
+              recipesByDish.value[dishId] = [...recipesStore.recipes]
             } else {
-              // Initialize empty array for recipes with no snapshots
-              snapshotsByRecipe.value[recipeId] = []
+              // Initialize empty array for dishes with no recipes
+              recipesByDish.value[dishId] = []
+              console.log(`Dish ${dishId} has no recipes`)
             }
+          } else {
+            console.warn(`Dish ${dishId} not found`)
           }
         } catch (err) {
-          console.error(`Failed to load recipe ${recipeId}:`, err)
+          console.error(`Failed to load dish ${dishId}:`, err)
         }
       }
+    } else {
+      console.warn('No dishes found in book:', book.value)
     }
+    
+    console.log('Final dishes array:', dishes.value)
+    console.log('Final recipesByDish:', recipesByDish.value)
   } catch (err) {
     error.value = err.message || 'Failed to load recipe book'
   } finally {
@@ -398,53 +419,53 @@ async function loadBookData() {
   }
 }
 
-function getRecipeSnapshots(recipeId) {
-  // Get snapshots from our per-recipe map
-  const recipeSnapshots = snapshotsByRecipe.value[recipeId] || []
+function getDishRecipes(dishId) {
+  // Get recipes from our per-dish map
+  const dishRecipes = recipesByDish.value[dishId] || []
   
-  // Filter to only include snapshots that are actually in the recipe's snapshots array
-  const recipe = recipes.value.find(r => r._id === recipeId)
-  if (!recipe || !recipe.snapshots || recipe.snapshots.length === 0) return []
+  // Filter to only include recipes that are actually in the dish's recipes array
+  const dish = dishes.value.find(d => d._id === dishId)
+  if (!dish || !dish.recipes || dish.recipes.length === 0) return []
   
-  const validSnapshots = recipeSnapshots.filter(s => 
-    recipe.snapshots && recipe.snapshots.includes(s._id)
+  const validRecipes = dishRecipes.filter(r => 
+    dish.recipes && dish.recipes.includes(r._id)
   )
   
   // Sort chronologically
-  return validSnapshots.sort((a, b) => {
+  return validRecipes.sort((a, b) => {
     const dateA = new Date(a.date || 0)
     const dateB = new Date(b.date || 0)
     return dateA - dateB
   })
 }
 
-function getRecipesByRating(rating) {
-  return recipes.value.filter(recipe => {
-    if (!recipe.defaultSnapshot) return false
-    // Get snapshots from our per-recipe map
-    const recipeSnapshots = snapshotsByRecipe.value[recipe._id] || []
-    const defaultSnapshot = recipeSnapshots.find(s => s._id === recipe.defaultSnapshot)
-    // Return true if default snapshot has this rating
-    return defaultSnapshot && defaultSnapshot.ranking === rating
+function getDishesByRating(rating) {
+  return dishes.value.filter(dish => {
+    if (!dish.defaultRecipe) return false
+    // Get recipes from our per-dish map
+    const dishRecipes = recipesByDish.value[dish._id] || []
+    const defaultRecipe = dishRecipes.find(r => r._id === dish.defaultRecipe)
+    // Return true if default recipe has this rating
+    return defaultRecipe && defaultRecipe.ranking === rating
   })
 }
 
-function getUnrankedRecipes() {
-  return recipes.value.filter(recipe => {
-    // Recipe is unranked if:
-    // 1. It has no default snapshot, OR
-    // 2. It has a default snapshot but no snapshots loaded, OR
-    // 3. The default snapshot has no ranking (ranking is 0, null, or undefined)
-    if (!recipe.defaultSnapshot) return true
+function getUnrankedDishes() {
+  return dishes.value.filter(dish => {
+    // Dish is unranked if:
+    // 1. It has no default recipe, OR
+    // 2. It has a default recipe but no recipes loaded, OR
+    // 3. The default recipe has no ranking (ranking is 0, null, or undefined)
+    if (!dish.defaultRecipe) return true
     
-    const recipeSnapshots = snapshotsByRecipe.value[recipe._id] || []
-    if (recipeSnapshots.length === 0) return true
+    const dishRecipes = recipesByDish.value[dish._id] || []
+    if (dishRecipes.length === 0) return true
     
-    const defaultSnapshot = recipeSnapshots.find(s => s._id === recipe.defaultSnapshot)
-    if (!defaultSnapshot) return true
+    const defaultRecipe = dishRecipes.find(r => r._id === dish.defaultRecipe)
+    if (!defaultRecipe) return true
     
-    // Recipe is unranked if ranking is missing, 0, null, or undefined
-    return !defaultSnapshot.ranking || defaultSnapshot.ranking === 0
+    // Dish is unranked if ranking is missing, 0, null, or undefined
+    return !defaultRecipe.ranking || defaultRecipe.ranking === 0
   })
 }
 
@@ -465,18 +486,18 @@ function nextPage() {
   }
 }
 
-function openRecipe(recipeId, snapshotId = null) {
+function openDish(dishId, recipeId = null) {
   const bookId = route.params.id
   // Build query string properly
   const queryParams = []
-  if (snapshotId) {
-    queryParams.push(`snapshot=${snapshotId}`)
+  if (recipeId) {
+    queryParams.push(`recipe=${recipeId}`)
   }
   if (bookId) {
     queryParams.push(`book=${bookId}`)
   }
   const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : ''
-  router.push(`/recipe/${recipeId}${queryString}`)
+  router.push(`/recipe/${dishId}${queryString}`)
 }
 
 async function handleAddRecipe() {
