@@ -250,6 +250,15 @@ const recipesStore = useRecipesStore()
 const recipeBooksStore = useRecipeBooksStore()
 const authStore = useAuthStore()
 
+// Helper function to get local date string (YYYY-MM-DD) instead of UTC
+function getLocalDateString() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 const currentBookId = ref(null)
 const currentBookName = ref('Recipe Book')
 
@@ -266,7 +275,7 @@ const editableRecipe = ref({
   ingredientsList: '',
   instructions: '',
   note: '',
-  date: new Date().toISOString().split('T')[0],
+  date: getLocalDateString(),
   ranking: 1,
   subname: '',
   pictures: []
@@ -544,7 +553,7 @@ function loadRecipeData(recipe) {
     ingredientsList: recipe.ingredientsList || '',
     instructions: recipe.instructions || '',
     note: recipe.note || '',
-    date: recipe.date ? recipe.date.split('T')[0] : new Date().toISOString().split('T')[0],
+    date: recipe.date ? recipe.date.split('T')[0] : getLocalDateString(),
     ranking: recipe.ranking || 1,
     subname: recipe.subname || '',
     pictures: recipe.pictures || []
@@ -816,7 +825,7 @@ async function saveRecipe() {
             ingredientsList: '',
             instructions: '',
             note: '',
-            date: new Date().toISOString().split('T')[0],
+            date: getLocalDateString(),
             ranking: 1,
             subname: '',
             pictures: []
@@ -830,6 +839,11 @@ async function saveRecipe() {
         dish: dishId
       })
       await recipesStore.fetchRecipes(dishId)
+      // Reload the current recipe data to reflect the updated ranking
+      const updatedRecipe = recipesStore.recipes.find(r => r._id === currentRecipe.value._id)
+      if (updatedRecipe) {
+        loadRecipeData(updatedRecipe)
+      }
     }
   } catch (err) {
     error.value = err.message || 'Failed to save recipe'

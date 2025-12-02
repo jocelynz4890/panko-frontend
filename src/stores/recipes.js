@@ -99,7 +99,13 @@ export const useRecipesStore = defineStore('recipes', () => {
         recipeData.ingredientsList || '',
         recipeData.subname || '',
         recipeData.pictures || [],
-        recipeData.date || new Date().toISOString().split('T')[0],
+        recipeData.date || (() => {
+          const now = new Date()
+          const year = now.getFullYear()
+          const month = String(now.getMonth() + 1).padStart(2, '0')
+          const day = String(now.getDate()).padStart(2, '0')
+          return `${year}-${month}-${day}`
+        })(),
         recipeData.instructions || '',
         recipeData.note || '',
         recipeData.ranking || 1,
@@ -132,7 +138,13 @@ export const useRecipesStore = defineStore('recipes', () => {
         recipeData.ingredientsList || '',
         recipeData.subname || '',
         recipeData.pictures || [],
-        recipeData.date || new Date().toISOString().split('T')[0],
+        recipeData.date || (() => {
+          const now = new Date()
+          const year = now.getFullYear()
+          const month = String(now.getMonth() + 1).padStart(2, '0')
+          const day = String(now.getDate()).padStart(2, '0')
+          return `${year}-${month}-${day}`
+        })(),
         recipeData.instructions || '',
         recipeData.note || '',
         recipeData.ranking || 1
