@@ -2,13 +2,6 @@
   <div class="calendar-container">
     <h1 class="page-title">Cooking Calendar</h1>
     
-    <!-- Zoom Controls (mobile only) -->
-    <div class="zoom-controls">
-      <button @click="zoomOut" class="zoom-btn" title="Zoom Out">−</button>
-      <button @click="resetZoom" class="zoom-btn" title="Reset Zoom">{{ Math.round(zoom * 100) }}%</button>
-      <button @click="zoomIn" class="zoom-btn" title="Zoom In">+</button>
-    </div>
-    
     <div v-if="loading" class="loading">Loading...</div>
     <div v-if="error" class="error">{{ error }}</div>
     
@@ -920,19 +913,6 @@ function handleTouchEnd(e) {
   }
 }
 
-function zoomIn() {
-  zoom.value = Math.min(2, zoom.value + 0.25)
-}
-
-function zoomOut() {
-  zoom.value = Math.max(0.5, zoom.value - 0.25)
-}
-
-function resetZoom() {
-  zoom.value = 1
-  panX.value = 0
-  panY.value = 0
-}
 </script>
 
 <style scoped>
@@ -1301,39 +1281,6 @@ function resetZoom() {
     padding: 1rem;
     margin: 0;
     border-bottom: 2px solid var(--color-dark-brown);
-  }
-  
-  .zoom-controls {
-    position: sticky;
-    top: 60px;
-    z-index: 10;
-    display: flex;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: 0.5rem;
-    background-color: var(--color-cream);
-    border-bottom: 1px solid var(--color-light-brown);
-  }
-  
-  .zoom-btn {
-    padding: 0.5rem 1rem;
-    background-color: var(--color-light-brown);
-    color: var(--color-dark-brown);
-    border: 2px solid var(--color-medium-brown);
-    border-radius: 4px;
-    font-size: 1.2rem;
-    font-weight: 600;
-    cursor: pointer;
-    min-width: 60px;
-    transition: background-color 0.2s;
-  }
-  
-  .zoom-btn:hover {
-    background-color: var(--color-gold);
-  }
-  
-  .zoom-btn:active {
-    transform: scale(0.95);
   }
   
   .panable-container {

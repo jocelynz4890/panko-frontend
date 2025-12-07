@@ -8,12 +8,6 @@
       <!-- Book header with name and edit button - Outside the book -->
       <div class="book-header">
         <h1 class="book-name">{{ currentBookName }}</h1>
-        <!-- Zoom Controls (mobile only) -->
-        <div class="zoom-controls">
-          <button @click="zoomOut" class="zoom-btn" title="Zoom Out">−</button>
-          <button @click="resetZoom" class="zoom-btn" title="Reset Zoom">{{ Math.round(zoom * 100) }}%</button>
-          <button @click="zoomIn" class="zoom-btn" title="Zoom In">+</button>
-        </div>
         <div class="book-header-actions">
           <button 
             v-if="dish && dish._id && !dish._id.startsWith('temp-')"
@@ -1581,19 +1575,6 @@ function handleTouchEnd(e) {
   }
 }
 
-function zoomIn() {
-  zoom.value = Math.min(2, zoom.value + 0.25)
-}
-
-function zoomOut() {
-  zoom.value = Math.max(0.5, zoom.value - 0.25)
-}
-
-function resetZoom() {
-  zoom.value = 1
-  panX.value = 0
-  panY.value = 0
-}
 </script>
 
 <style scoped>
@@ -2499,37 +2480,6 @@ function resetZoom() {
     background-color: var(--color-cream);
     padding: 1rem;
     margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  
-  .zoom-controls {
-    display: flex;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0;
-  }
-  
-  .zoom-btn {
-    padding: 0.5rem 1rem;
-    background-color: var(--color-light-brown);
-    color: var(--color-dark-brown);
-    border: 2px solid var(--color-medium-brown);
-    border-radius: 4px;
-    font-size: 1.2rem;
-    font-weight: 600;
-    cursor: pointer;
-    min-width: 60px;
-    transition: background-color 0.2s;
-  }
-  
-  .zoom-btn:hover {
-    background-color: var(--color-gold);
-  }
-  
-  .zoom-btn:active {
-    transform: scale(0.95);
   }
   
   .panable-container {
