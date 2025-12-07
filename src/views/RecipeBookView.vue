@@ -229,9 +229,9 @@
               title="Table of Contents"
             >
               <img src="/assets/table_of_contents_bookmark_horizontal.png" alt="Table of Contents" class="bookmark-bg" />
-              <img src="/assets/home.png" alt="Home" class="bookmark-overlay" />
+              <img src="/assets/home.png" alt="Home" class="bookmark-overlay bookmark-home-overlay" />
               <img src="/assets/bookmark_on_hover_horizontal.png" alt="Table of Contents" class="bookmark-bg-hover" />
-              <img src="/assets/home.png" alt="Home" class="bookmark-overlay-hover" />
+              <img src="/assets/home.png" alt="Home" class="bookmark-overlay-hover bookmark-home-overlay" />
             </div>
             <div
               class="bookmark bookmark-rankings"
@@ -1025,6 +1025,11 @@ watch(() => route.query.refresh, () => {
 .bookmark-star-overlay {
   width: 37.5px !important;
   height: 37.5px !important;
+}
+
+.bookmark-home-overlay {
+  width: 40px !important;
+  height: 40px !important;
 }
 
 .bookmark-bg-hover,

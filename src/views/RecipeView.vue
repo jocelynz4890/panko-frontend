@@ -1878,6 +1878,11 @@ onMounted(() => {
   height: 37.5px !important;
 }
 
+.bookmark-home-overlay {
+  width: 40px !important;
+  height: 40px !important;
+}
+
 .bookmark-bg-hover,
 .bookmark-overlay-hover {
   opacity: 0;
