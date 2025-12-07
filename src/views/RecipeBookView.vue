@@ -37,7 +37,7 @@
                     :class="{ 'untitled-dish': dish.name === 'New Dish' }"
                     @click="openDish(dish._id)"
                   >
-                    {{ dish.name }}
+                    {{ truncateName(dish.name) }}
                   </div>
                   <div class="snapshots-list">
                     <div
@@ -46,7 +46,7 @@
                       class="snapshot-entry"
                       @click="openDish(dish._id, recipe._id)"
                     >
-                      {{ recipe.subname || 'Untitled Recipe' }}
+                      {{ truncateName(recipe.subname || 'Untitled Recipe') }}
                     </div>
                   </div>
                 </div>
@@ -140,7 +140,7 @@
                     class="recipe-link"
                     @click="openDish(dish._id)"
                   >
-                    {{ dish.name }}
+                    {{ truncateName(dish.name) }}
                   </div>
                   <div v-if="getDishesByRating(rating).length === 0" class="no-recipes">
                     No dishes with this rating
@@ -152,7 +152,8 @@
           
           <div class="page right-page" :class="{ 'page-flipped': currentPage > 0 }">
             <!-- Right page content -->
-            <div v-if="currentView === 'contents'" class="dictionary-view">
+            <div v-if="currentView === 'contents'" class="dictionary-view-wrapper">
+              <div class="dictionary-view">
               <div v-if="sortedDishes.length === 0" class="empty-state">
                 No dishes yet.
               </div>
@@ -174,7 +175,7 @@
                         :class="{ 'untitled-dish': dish.name === 'New Dish' }"
                         @click="openDish(dish._id)"
                       >
-                        {{ dish.name }}
+                        {{ truncateName(dish.name) }}
                       </span>
                       <span class="dictionary-dots">................................................................................</span>
                       <span class="dictionary-date">{{ getDishDate(dish._id) }}</span>
@@ -185,12 +186,13 @@
                       class="dictionary-snapshot-line"
                       @click="openDish(dish._id, recipe._id)"
                     >
-                      <span class="dictionary-snapshot-name">{{ recipe.subname || 'Untitled Recipe' }}</span>
+                      <span class="dictionary-snapshot-name">{{ truncateName(recipe.subname || 'Untitled Recipe') }}</span>
                       <span class="dictionary-dots">................................................................................</span>
                       <span class="dictionary-date">{{ formatRecipeDate(recipe.date) }}</span>
                     </div>
                   </div>
                 </div>
+              </div>
               </div>
             </div>
             
@@ -208,7 +210,7 @@
                     class="recipe-link"
                     @click="openDish(dish._id)"
                   >
-                    {{ dish.name }}
+                    {{ truncateName(dish.name) }}
                   </div>
                   <div v-if="getUnrankedDishes().length === 0" class="no-recipes">
                     No unranked dishes
@@ -229,9 +231,9 @@
               title="Table of Contents"
             >
               <img src="/assets/table_of_contents_bookmark_horizontal.png" alt="Table of Contents" class="bookmark-bg" />
-              <img src="/assets/home.png" alt="Home" class="bookmark-overlay bookmark-home-overlay" />
+              <img src="/assets/home_navbar.png" alt="Home" class="bookmark-overlay bookmark-home-overlay" />
               <img src="/assets/bookmark_on_hover_horizontal.png" alt="Table of Contents" class="bookmark-bg-hover" />
-              <img src="/assets/home.png" alt="Home" class="bookmark-overlay-hover bookmark-home-overlay" />
+              <img src="/assets/home_navbar.png" alt="Home" class="bookmark-overlay-hover bookmark-home-overlay" />
             </div>
             <div
               class="bookmark bookmark-rankings"
@@ -286,12 +288,15 @@ onMounted(() => {
 })
 
 const sortedDishes = computed(() => {
-  return [...dishes.value].sort((a, b) => a.name.localeCompare(b.name))
+  return [...dishes.value]
+    .filter(dish => dish && dish._id && dish.name) // Filter out invalid dishes
+    .sort((a, b) => a.name.localeCompare(b.name))
 })
 
 // Categorized dishes for table of contents
 const regularDishes = computed(() => {
   return sortedDishes.value.filter(dish => {
+    if (!dish || !dish._id) return false
     const recipes = getDishRecipes(dish._id)
     return recipes.length > 0 && dish.name !== 'New Dish'
   })
@@ -299,6 +304,7 @@ const regularDishes = computed(() => {
 
 const untitledDishes = computed(() => {
   return sortedDishes.value.filter(dish => {
+    if (!dish || !dish._id) return false
     const recipes = getDishRecipes(dish._id)
     return recipes.length > 0 && dish.name === 'New Dish'
   })
@@ -306,6 +312,7 @@ const untitledDishes = computed(() => {
 
 const noRecipeDishes = computed(() => {
   return sortedDishes.value.filter(dish => {
+    if (!dish || !dish._id) return false
     const recipes = getDishRecipes(dish._id)
     return recipes.length === 0
   })
@@ -316,6 +323,7 @@ const dictionaryGroups = computed(() => {
   const groups = {}
   
   sortedDishes.value.forEach(dish => {
+    if (!dish || !dish.name) return // Skip invalid dishes
     const firstLetter = dish.name.charAt(0).toUpperCase()
     if (!groups[firstLetter]) {
       groups[firstLetter] = []
@@ -357,6 +365,12 @@ function formatRecipeDate(dateString) {
   return `${month}/${day}/${year}`
 }
 
+function truncateName(name, maxLength = 20) {
+  if (!name) return ''
+  if (name.length <= maxLength) return name
+  return name.substring(0, maxLength) + '...'
+}
+
 const hasNextPage = computed(() => {
   // For now, we only have one page of content
   return false
@@ -389,7 +403,18 @@ async function loadBookData() {
         try {
           const response = await dishesAPI.getDish(dishId)
           const dishes = response.data.dishes || response.data
-          return Array.isArray(dishes) ? dishes[0] : dishes
+          const dish = Array.isArray(dishes) ? dishes[0] : dishes
+          // Ensure dish has required properties and recipes is always an array
+          if (dish) {
+            return {
+              ...dish,
+              recipes: Array.isArray(dish.recipes) ? dish.recipes : [],
+              name: dish.name || 'Untitled',
+              description: dish.description || '',
+              defaultRecipe: dish.defaultRecipe || null
+            }
+          }
+          return null
         } catch (err) {
           console.error(`Failed to load dish ${dishId}:`, err)
           return null
@@ -400,7 +425,15 @@ async function loadBookData() {
       
       // Then, fetch all recipes in parallel for dishes that have recipes
       const recipePromises = loadedDishes.map(async (dish) => {
-        if (dish.recipes && dish.recipes.length > 0) {
+        // Ensure dish exists and has recipes property
+        if (!dish || !dish._id) {
+          return { dishId: dish?._id || null, recipes: [] }
+        }
+        
+        // Normalize recipes to always be an array
+        const recipesArray = Array.isArray(dish.recipes) ? dish.recipes : []
+        
+        if (recipesArray.length > 0) {
           try {
             const response = await recipeAPI.getRecipes(dish._id)
             const recipesData = response.data.recipes || response.data
@@ -416,14 +449,30 @@ async function loadBookData() {
       
       const recipeResults = await Promise.all(recipePromises)
       
-      // Process results
+      // Process results - ensure all dishes have valid structure
       for (const dish of loadedDishes) {
+        if (!dish || !dish._id) {
+          console.warn('Skipping invalid dish:', dish)
+          continue // Skip invalid dishes
+        }
+        
+        // Normalize the recipes property to always be an array
+        let recipesArray = []
+        if (dish.recipes) {
+          if (Array.isArray(dish.recipes)) {
+            recipesArray = [...dish.recipes]
+          } else {
+            console.warn(`Dish ${dish._id} has non-array recipes property:`, typeof dish.recipes, dish.recipes)
+            recipesArray = []
+          }
+        }
+        
         dishes.value.push({
           _id: dish._id,
-          name: dish.name,
-          description: dish.description,
-          recipes: dish.recipes ? [...dish.recipes] : [],
-          defaultRecipe: dish.defaultRecipe
+          name: dish.name || 'Untitled',
+          description: dish.description || '',
+          recipes: recipesArray,
+          defaultRecipe: dish.defaultRecipe || null
         })
       }
       
@@ -466,7 +515,7 @@ function getDishRecipes(dishId) {
 
 function getDishesByRating(rating) {
   return dishes.value.filter(dish => {
-    if (!dish.defaultRecipe) return false
+    if (!dish || !dish._id || !dish.defaultRecipe) return false
     // Get recipes from our per-dish map
     const dishRecipes = recipesByDish.value[dish._id] || []
     const defaultRecipe = dishRecipes.find(r => r._id === dish.defaultRecipe)
@@ -477,6 +526,7 @@ function getDishesByRating(rating) {
 
 function getUnrankedDishes() {
   return dishes.value.filter(dish => {
+    if (!dish || !dish._id) return false
     // Dish is unranked if:
     // 1. It has no default recipe, OR
     // 2. It has a default recipe but no recipes loaded, OR
@@ -745,7 +795,7 @@ watch(() => route.query.refresh, () => {
     2px 0 4px rgba(0, 0, 0, 0.08);
   max-height: 90vh;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: visible;
 }
 
 .page::before {
@@ -1109,11 +1159,20 @@ watch(() => route.query.refresh, () => {
 
 
 /* Dictionary view styles */
+.dictionary-view-wrapper {
+  padding: 0 20px;
+  width: calc(100% + 40px);
+  margin-left: -20px;
+  overflow-x: visible;
+  overflow-y: auto;
+}
+
 .dictionary-view {
   padding: 0;
   width: 100%;
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: visible;
+  overflow-y: auto;
 }
 
 .dictionary-group {
@@ -1141,9 +1200,10 @@ watch(() => route.query.refresh, () => {
   line-height: 1.6;
   margin-bottom: 0.25rem;
   width: 100%;
-  max-width: 100%;
-  overflow: hidden;
+  max-width: none;
+  overflow: visible;
   gap: 0;
+  position: relative;
 }
 
 .dictionary-snapshot-line {
@@ -1181,16 +1241,16 @@ watch(() => route.query.refresh, () => {
 }
 
 .dictionary-dots {
-  flex: 1;
+  flex: 0 1 auto;
   overflow: hidden;
   white-space: nowrap;
   color: var(--color-light-brown);
   font-size: 0.7rem;
   margin: 0;
-  padding: 0 0.25rem;
+  padding: 0;
   opacity: 0.4;
   min-width: 0;
-  max-width: 100%;
+  max-width: 60%;
   letter-spacing: 2px;
 }
 
@@ -1200,7 +1260,10 @@ watch(() => route.query.refresh, () => {
   font-size: 0.9rem;
   margin: 0;
   padding: 0;
+  margin-left: 0.5rem;
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
 }
 
 

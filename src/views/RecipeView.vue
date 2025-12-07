@@ -8,10 +8,20 @@
       <!-- Book header with name and edit button - Outside the book -->
       <div class="book-header">
         <h1 class="book-name">{{ currentBookName }}</h1>
-        <button class="edit-toggle" @click="toggleEditMode" :disabled="saving">
-          <img src="/assets/pencil.png" alt="Edit" class="edit-icon" />
-          {{ saving ? 'Saving...' : (editMode ? 'Save' : 'Edit') }}
-        </button>
+        <div class="book-header-actions">
+          <button 
+            v-if="dish && dish._id && !dish._id.startsWith('temp-')"
+            @click="showDeleteDishDialog = true"
+            class="delete-dish-btn"
+            title="Delete this dish"
+          >
+            Delete Dish
+          </button>
+          <button class="edit-toggle" @click="toggleEditMode" :disabled="saving">
+            <img src="/assets/pencil.png" alt="Edit" class="edit-icon" />
+            {{ saving ? 'Saving...' : (editMode ? 'Save' : 'Edit') }}
+          </button>
+        </div>
       </div>
       
       <div class="notebook-wrapper">
@@ -65,6 +75,14 @@
                 <img src="/assets/filled_in_star.png" alt="Star" class="star-icon-small" />
                 Default
               </span>
+              <button
+                v-if="!isNewRecipe && currentRecipe"
+                @click="showDeleteRecipeDialog = true"
+                class="delete-recipe-btn"
+                title="Delete this recipe"
+              >
+                Delete Recipe
+              </button>
             </div>
           </div>
           
@@ -215,9 +233,9 @@
             title="Go to Table of Contents"
           >
             <img src="/assets/table_of_contents_bookmark_horizontal.png" alt="Table of Contents" class="bookmark-bg" />
-            <img src="/assets/home.png" alt="Home" class="bookmark-overlay" />
+            <img src="/assets/home_navbar.png" alt="Home" class="bookmark-overlay" />
             <img src="/assets/bookmark_on_hover_horizontal.png" alt="Table of Contents" class="bookmark-bg-hover" />
-            <img src="/assets/home.png" alt="Home" class="bookmark-overlay-hover" />
+            <img src="/assets/home_navbar.png" alt="Home" class="bookmark-overlay-hover" />
           </div>
           <div
             class="bookmark bookmark-rankings"
@@ -234,6 +252,27 @@
       </div>
     </div>
     </div>
+    
+    <!-- Confirmation Dialogs -->
+    <ConfirmDialog
+      v-model:show="showDeleteRecipeDialog"
+      title="Delete Recipe"
+      message="Are you sure you want to delete this recipe? This action cannot be undone."
+      confirm-text="Delete"
+      cancel-text="Cancel"
+      :danger="true"
+      @confirm="handleDeleteRecipe"
+    />
+    
+    <ConfirmDialog
+      v-model:show="showDeleteDishDialog"
+      title="Delete Dish"
+      message="Are you sure you want to delete this dish? This will delete all recipes associated with this dish. This action cannot be undone."
+      confirm-text="Delete"
+      cancel-text="Cancel"
+      :danger="true"
+      @confirm="handleDeleteDish"
+    />
   </div>
 </template>
 
@@ -243,6 +282,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useRecipesStore } from '../stores/recipes'
 import { useRecipeBooksStore } from '../stores/recipeBooks'
 import { useAuthStore } from '../stores/auth'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import { dishesAPI, recipeAPI } from '../api/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -283,6 +324,8 @@ const editableRecipe = ref({
 const tabsContainer = ref(null)
 const recipesBackup = ref([])
 const imageUploadRef = ref(null)
+const showDeleteRecipeDialog = ref(false)
+const showDeleteDishDialog = ref(false)
 
 // Sort recipes by date, newest first (for display: New button, then newest, then older)
 const sortedRecipes = computed(() => {
@@ -1104,6 +1147,71 @@ async function goToRankings() {
   }
 }
 
+async function handleDeleteRecipe() {
+  if (!currentRecipe.value || !currentRecipe.value._id) return
+  
+  try {
+    saving.value = true
+    error.value = ''
+    
+    await recipeAPI.deleteRecipe(currentRecipe.value._id)
+    
+    // Reload recipes
+    if (dish.value?._id) {
+      await recipesStore.fetchRecipes(dish.value._id)
+      // Update backup after fetching
+      if (recipesStore.recipes && recipesStore.recipes.length > 0) {
+        recipesBackup.value = [...recipesStore.recipes]
+      } else {
+        recipesBackup.value = []
+      }
+      
+      // Switch to another recipe or show new recipe
+      if (recipesStore.recipes && recipesStore.recipes.length > 0) {
+        // Switch to the first recipe (newest)
+        currentRecipeIndex.value = 0
+        isNewRecipe.value = false
+        loadRecipeData(recipesStore.recipes[0])
+      } else {
+        // No recipes left - show new recipe form
+        isNewRecipe.value = true
+        currentRecipeIndex.value = -1
+        loadRecipeData(null)
+      }
+    }
+  } catch (err) {
+    error.value = err.message || 'Failed to delete recipe'
+    console.error('Error deleting recipe:', err)
+  } finally {
+    saving.value = false
+  }
+}
+
+async function handleDeleteDish() {
+  if (!dish.value || !dish.value._id || dish.value._id.startsWith('temp-')) return
+  
+  try {
+    saving.value = true
+    error.value = ''
+    
+    await dishesAPI.deleteDish(dish.value._id)
+    
+    // Navigate back to the book or home
+    let bookId = currentBookId.value || sessionStorage.getItem('pendingRecipeBook')
+    
+    if (bookId) {
+      router.push(`/book/${bookId}`)
+    } else {
+      router.push('/')
+    }
+  } catch (err) {
+    error.value = err.message || 'Failed to delete dish'
+    console.error('Error deleting dish:', err)
+  } finally {
+    saving.value = false
+  }
+}
+
 // Watch snapshots to restore if cleared and update backup
 watch(() => recipesStore.recipes, (newRecipes, oldRecipes) => {
   // CRITICAL: If recipes were cleared unexpectedly, restore from backup immediately
@@ -1166,6 +1274,12 @@ onMounted(() => {
   align-items: center;
   width: 100%;
   padding: 0 1rem;
+}
+
+.book-header-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
 }
 
 .book-name {
@@ -1430,6 +1544,23 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.25rem;
+}
+
+.delete-recipe-btn,
+.delete-dish-btn {
+  padding: 0.5rem 1rem;
+  background-color: #d32f2f;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.delete-recipe-btn:hover,
+.delete-dish-btn:hover {
+  background-color: #b71c1c;
 }
 
 .recipe-name-input {

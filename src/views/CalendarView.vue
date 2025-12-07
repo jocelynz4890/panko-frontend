@@ -34,12 +34,13 @@
               :draggable="true"
               @dragstart="handleDragStart($event, scheduled)"
               @dragend="handleDragEnd($event)"
-              @click.stop="handleScheduledClick($event, scheduled.scheduledRecipe._id)"
-              :title="`${scheduled.dishName} - ${scheduled.recipeName || 'Default'}`"
+              @click.stop="handleScheduledClick($event, scheduled)"
+              @dblclick.stop="handleScheduledDoubleClick($event, scheduled.scheduledRecipe._id)"
+              :title="`${scheduled.dishName} - ${scheduled.recipeName || 'Default'} (click to open, double-click to remove)`"
             >
               <div class="scheduled-recipe-name">{{ scheduled.dishName }}</div>
               <div class="scheduled-snapshot-name">{{ scheduled.recipeName || 'Default' }}</div>
-              <div class="remove-hint">click to remove</div>
+              <div class="remove-hint">click to open • double-click to remove</div>
             </div>
             <div
               v-if="getScheduledForDay(day.date).length === 0"
@@ -89,22 +90,45 @@
         <button @click="submitUpdates" class="submit-updates-btn" :disabled="submitting">
           {{ submitting ? 'Saving...' : 'Save Changes' }}
         </button>
-        <button @click="clearPendingUpdates" class="clear-updates-btn">Clear</button>
+        <button @click="showClearPendingDialog = true" class="clear-updates-btn">Clear</button>
       </div>
     </div>
   </Teleport>
+  
+  <!-- Confirmation Dialogs -->
+  <ConfirmDialog
+    v-model:show="showDeleteScheduledDialog"
+    title="Remove Scheduled Recipe"
+    message="Are you sure you want to remove this scheduled recipe?"
+    confirm-text="Remove"
+    cancel-text="Cancel"
+    :danger="true"
+    @confirm="confirmRemoveScheduled"
+  />
+  
+  <ConfirmDialog
+    v-model:show="showClearPendingDialog"
+    title="Clear Pending Changes"
+    message="Are you sure you want to clear all pending changes?"
+    confirm-text="Clear"
+    cancel-text="Cancel"
+    :danger="true"
+    @confirm="confirmClearPendingUpdates"
+  />
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch, onActivated, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useCalendarStore } from '../stores/calendar'
 import { useRecipeBooksStore } from '../stores/recipeBooks'
 import { useRecipesStore } from '../stores/recipes'
 import { useAuthStore } from '../stores/auth'
 import { dishesAPI, recipeAPI } from '../api/api'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 
 const route = useRoute()
+const router = useRouter()
 const calendarStore = useCalendarStore()
 const recipeBooksStore = useRecipeBooksStore()
 const recipesStore = useRecipesStore()
@@ -122,6 +146,9 @@ const isDragging = ref(false) // Track if we're currently dragging to prevent cl
 const calendarWrapperRef = ref(null)
 const recipePanelRef = ref(null)
 const recipePanelHeight = ref('auto')
+const showDeleteScheduledDialog = ref(false)
+const showClearPendingDialog = ref(false)
+const pendingDeleteScheduledId = ref(null)
 
 const currentMonthYear = computed(() => {
   return currentDate.value.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
@@ -276,7 +303,8 @@ async function loadData() {
           dishName: recipe.dishName,
           recipeName: recipe.name || 'Default',
           date: normalizedDate,
-          recipe: scheduled.recipe
+          recipe: scheduled.recipe,
+          dishId: recipe.dishId
         })
       } else {
         // If recipe not found, mark for lookup
@@ -308,6 +336,7 @@ async function loadData() {
                   if (dish) {
                     item.dishName = dish.name
                     item.recipeName = recipe.subname || 'Untitled'
+                    item.dishId = dishId
                     found = true
                     break
                   }
@@ -490,6 +519,10 @@ async function handleDrop(event, date) {
         date: date
       })
       
+      // Find the dishId from availableRecipes
+      const recipeInfo = availableRecipes.value.find(r => r._id === recipeId)
+      const dishId = recipeInfo?.dishId || null
+      
       // Add to local state immediately
       const newScheduledItem = {
         scheduledRecipe: { 
@@ -500,7 +533,8 @@ async function handleDrop(event, date) {
         dishName: dishName,
         recipeName: recipeName || null,
         date: date,
-        recipe: recipeId
+        recipe: recipeId,
+        dishId: dishId
       }
       scheduledRecipesData.value.push(newScheduledItem)
       
@@ -539,17 +573,43 @@ function handleDragEnd(event) {
   }, 300)
 }
 
-function handleScheduledClick(event, scheduledRecipeId) {
+function handleScheduledClick(event, scheduled) {
   // Prevent click if we just finished dragging
   if (isDragging.value) {
     return
   }
   // Use a small delay to ensure drag didn't just happen
   setTimeout(() => {
-    if (!isDragging.value) {
-      removeScheduled(scheduledRecipeId)
+    if (!isDragging.value && scheduled.dishId) {
+      // Navigate to the recipe
+      const recipeId = scheduled.recipe
+      const dishId = scheduled.dishId
+      // Try to find which book contains this dish for navigation
+      const findBookAndNavigate = async () => {
+        try {
+          await recipeBooksStore.fetchBooks()
+          const bookWithDish = recipeBooksStore.books.find(book => 
+            book.dishes && book.dishes.includes(dishId)
+          )
+          if (bookWithDish) {
+            router.push(`/recipe/${dishId}?book=${bookWithDish._id}&recipe=${recipeId}`)
+          } else {
+            router.push(`/recipe/${dishId}?recipe=${recipeId}`)
+          }
+        } catch (err) {
+          console.warn('Failed to find book for dish, navigating without book:', err)
+          router.push(`/recipe/${dishId}?recipe=${recipeId}`)
+        }
+      }
+      findBookAndNavigate()
     }
   }, 50)
+}
+
+function handleScheduledDoubleClick(event, scheduledRecipeId) {
+  // Double-click to remove
+  event.stopPropagation()
+  removeScheduled(scheduledRecipeId)
 }
 
 function handleDragOver(event) {
@@ -578,28 +638,36 @@ function handleDragEnter(event) {
 }
 
 async function removeScheduled(scheduledRecipeId) {
-  if (confirm('Remove this scheduled recipe?')) {
-    // Check if it's a pending update
-    const pendingIndex = calendarStore.pendingUpdates.findIndex(
-      u => u.type === 'add' && u.scheduledRecipe === scheduledRecipeId
-    )
-    
-    if (pendingIndex !== -1) {
-      // Remove from pending updates
-      calendarStore.pendingUpdates.splice(pendingIndex, 1)
-    } else {
-      // Add to pending deletes
-      calendarStore.addPendingUpdate({
-        type: 'delete',
-        scheduledRecipe: scheduledRecipeId
-      })
-    }
-    
-    // Update local state
-    scheduledRecipesData.value = scheduledRecipesData.value.filter(
-      item => item.scheduledRecipe._id !== scheduledRecipeId
-    )
+  pendingDeleteScheduledId.value = scheduledRecipeId
+  showDeleteScheduledDialog.value = true
+}
+
+function confirmRemoveScheduled() {
+  const scheduledRecipeId = pendingDeleteScheduledId.value
+  if (!scheduledRecipeId) return
+  
+  // Check if it's a pending update
+  const pendingIndex = calendarStore.pendingUpdates.findIndex(
+    u => u.type === 'add' && u.scheduledRecipe === scheduledRecipeId
+  )
+  
+  if (pendingIndex !== -1) {
+    // Remove from pending updates
+    calendarStore.pendingUpdates.splice(pendingIndex, 1)
+  } else {
+    // Add to pending deletes
+    calendarStore.addPendingUpdate({
+      type: 'delete',
+      scheduledRecipe: scheduledRecipeId
+    })
   }
+  
+  // Update local state
+  scheduledRecipesData.value = scheduledRecipesData.value.filter(
+    item => item.scheduledRecipe._id !== scheduledRecipeId
+  )
+  
+  pendingDeleteScheduledId.value = null
 }
 
 async function submitUpdates() {
@@ -634,10 +702,12 @@ async function submitUpdates() {
 }
 
 function clearPendingUpdates() {
-  if (confirm('Clear all pending changes?')) {
-    calendarStore.clearPendingUpdates()
-    loadData()
-  }
+  showClearPendingDialog.value = true
+}
+
+function confirmClearPendingUpdates() {
+  calendarStore.clearPendingUpdates()
+  loadData()
 }
 
 function updateRecipePanelHeight() {
@@ -798,14 +868,20 @@ onActivated(() => {
   padding: 0.4rem 0.5rem;
   border-radius: 4px;
   font-size: 0.85rem;
-  cursor: move;
+  cursor: grab;
   transition: all 0.2s;
   word-break: break-word;
   position: relative;
 }
 
+.scheduled-item:active {
+  cursor: grabbing;
+}
+
 .scheduled-item:hover {
   background-color: var(--color-dark-brown);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .scheduled-item:active {
