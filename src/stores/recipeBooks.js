@@ -77,6 +77,24 @@ export const useRecipeBooksStore = defineStore('recipeBooks', () => {
     }
   }
 
+  async function editBookName(bookId, newName) {
+    loading.value = true
+    error.value = null
+    try {
+      await recipeBookAPI.editRecipeBookName(bookId, newName)
+      await fetchBooks()
+      // Update current book if it's the one being edited
+      if (currentBook.value && currentBook.value._id === bookId) {
+        currentBook.value.name = newName
+      }
+    } catch (err) {
+      error.value = err.message || 'Failed to rename recipe book'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function addDishToBook(dishId, bookId) {
     loading.value = true
     error.value = null
@@ -103,6 +121,7 @@ export const useRecipeBooksStore = defineStore('recipeBooks', () => {
     fetchBook,
     createBook,
     deleteBook,
+    editBookName,
     addDishToBook
   }
 })

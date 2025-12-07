@@ -34,13 +34,19 @@
               :draggable="true"
               @dragstart="handleDragStart($event, scheduled)"
               @dragend="handleDragEnd($event)"
-              @click.stop="handleScheduledClick($event, scheduled)"
-              @dblclick.stop="handleScheduledDoubleClick($event, scheduled.scheduledRecipe._id)"
-              :title="`${scheduled.dishName} - ${scheduled.recipeName || 'Default'} (click to open, double-click to remove)`"
+              @click="handleScheduledItemClick(scheduled)"
+              :title="`${scheduled.dishName} - ${scheduled.recipeName || 'Default'} (click to open, drag to move)`"
             >
+              <button
+                class="remove-recipe-btn"
+                @click.stop="handleRemoveScheduled(scheduled.scheduledRecipe._id)"
+                @mousedown.stop
+                title="Remove from calendar"
+              >
+                ×
+              </button>
               <div class="scheduled-recipe-name">{{ scheduled.dishName }}</div>
               <div class="scheduled-snapshot-name">{{ scheduled.recipeName || 'Default' }}</div>
-              <div class="remove-hint">click to open • double-click to remove</div>
             </div>
             <div
               v-if="getScheduledForDay(day.date).length === 0"
@@ -68,7 +74,8 @@
             draggable="true"
             @dragstart="handleDragStartRecipe($event, recipe)"
             @dragend="handleDragEnd"
-            :title="`Drag to calendar to schedule: ${recipe.dishName} - ${recipe.name || 'Default'}`"
+            @click="handleRecipeListClick(recipe)"
+            :title="`Click to open, drag to calendar to schedule: ${recipe.dishName} - ${recipe.name || 'Default'}`"
           >
             <div class="snapshot-option-recipe">{{ recipe.dishName }}</div>
             <div class="snapshot-option-name">{{ recipe.name || formatDateShort(recipe.date) || 'Default' }}</div>
@@ -118,7 +125,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, onActivated, nextTick } from 'vue'
+import { ref, computed, onMounted, watch, onActivated, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCalendarStore } from '../stores/calendar'
 import { useRecipeBooksStore } from '../stores/recipeBooks'
@@ -578,17 +585,51 @@ function handleDragEnd(event) {
   }, 300)
 }
 
-function handleScheduledClick(event, scheduled) {
-  // Prevent click if we just finished dragging
+async function handleOpenRecipe(scheduled) {
+  if (!scheduled.dishId) return
+  
+  const recipeId = scheduled.recipe
+  const dishId = scheduled.dishId
+  // Try to find which book contains this dish for navigation
+  try {
+    await recipeBooksStore.fetchBooks()
+    const bookWithDish = recipeBooksStore.books.find(book => 
+      book.dishes && book.dishes.includes(dishId)
+    )
+    if (bookWithDish) {
+      router.push(`/recipe/${dishId}?book=${bookWithDish._id}&recipe=${recipeId}`)
+    } else {
+      router.push(`/recipe/${dishId}?recipe=${recipeId}`)
+    }
+  } catch (err) {
+    console.warn('Failed to find book for dish, navigating without book:', err)
+    router.push(`/recipe/${dishId}?recipe=${recipeId}`)
+  }
+}
+
+function handleScheduledItemClick(scheduled) {
+  // Only open if we're not dragging
   if (isDragging.value) {
     return
   }
   // Use a small delay to ensure drag didn't just happen
   setTimeout(() => {
-    if (!isDragging.value && scheduled.dishId) {
-      // Navigate to the recipe
-      const recipeId = scheduled.recipe
-      const dishId = scheduled.dishId
+    if (!isDragging.value) {
+      handleOpenRecipe(scheduled)
+    }
+  }, 50)
+}
+
+function handleRecipeListClick(recipe) {
+  // Only open if we're not dragging
+  if (isDragging.value) {
+    return
+  }
+  // Use a small delay to ensure drag didn't just happen
+  setTimeout(() => {
+    if (!isDragging.value && recipe.dishId) {
+      const recipeId = recipe._id
+      const dishId = recipe.dishId
       // Try to find which book contains this dish for navigation
       const findBookAndNavigate = async () => {
         try {
@@ -611,11 +652,10 @@ function handleScheduledClick(event, scheduled) {
   }, 50)
 }
 
-function handleScheduledDoubleClick(event, scheduledRecipeId) {
-  // Double-click to remove
-  event.stopPropagation()
+function handleRemoveScheduled(scheduledRecipeId) {
   removeScheduled(scheduledRecipeId)
 }
+
 
 function handleDragOver(event) {
   event.preventDefault()
@@ -739,6 +779,10 @@ watch(() => route.path, (newPath, oldPath) => {
     console.log('Calendar route activated - reloading data to get latest recipe defaults')
     loadData()
     updateRecipePanelHeight()
+  } else if (oldPath === '/calendar' && newPath !== '/calendar') {
+    // User is leaving the calendar page - clear pending updates
+    console.log('Leaving calendar page - clearing pending updates')
+    calendarStore.clearPendingUpdates()
   }
 })
 
@@ -747,6 +791,12 @@ onActivated(() => {
   console.log('Calendar component activated - reloading data to get latest recipe defaults')
   loadData()
   updateRecipePanelHeight()
+})
+
+// Clear pending updates when component is unmounted (user navigates away)
+onBeforeUnmount(() => {
+  console.log('Calendar component unmounting - clearing pending updates')
+  calendarStore.clearPendingUpdates()
 })
 </script>
 
@@ -871,15 +921,21 @@ onActivated(() => {
   background-color: var(--color-medium-brown);
   color: white;
   padding: 0.4rem 0.5rem;
+  padding-top: 0.25rem;
   border-radius: 4px;
   font-size: 0.85rem;
-  cursor: grab;
+  cursor: pointer;
   transition: all 0.2s;
   word-break: break-word;
   position: relative;
+  user-select: none;
 }
 
-.scheduled-item:active {
+.scheduled-item[draggable="true"] {
+  cursor: grab;
+}
+
+.scheduled-item[draggable="true"]:active {
   cursor: grabbing;
 }
 
@@ -889,19 +945,17 @@ onActivated(() => {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-.scheduled-item:active {
-  cursor: grabbing;
-}
-
 .scheduled-item.dragging {
   background-color: #800020 !important; /* Maroon red */
   opacity: 0.8;
   transform: scale(0.95);
+  cursor: grabbing;
 }
 
 .scheduled-recipe-name {
   font-weight: 600;
   font-size: 0.9rem;
+  padding-right: 1.5rem;
 }
 
 .scheduled-snapshot-name {
@@ -910,11 +964,31 @@ onActivated(() => {
   margin-top: 0.15rem;
 }
 
-.remove-hint {
-  font-size: 0.7rem;
-  opacity: 0.7;
-  font-style: italic;
-  margin-top: 0.25rem;
+.remove-recipe-btn {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  background-color: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.remove-recipe-btn:hover {
+  background-color: rgba(255, 255, 255, 0.4);
+  transform: scale(1.15);
 }
 
 
@@ -984,7 +1058,7 @@ onActivated(() => {
   border: 2px solid var(--color-light-brown);
   border-radius: 4px;
   padding: 0.75rem 1rem;
-  cursor: grab;
+  cursor: pointer;
   transition: all 0.2s;
   flex-shrink: 0;
 }

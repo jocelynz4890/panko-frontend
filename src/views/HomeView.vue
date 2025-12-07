@@ -10,12 +10,27 @@
         v-for="book in books"
         :key="book._id"
         class="book-card"
-        @click="openBook(book._id)"
       >
-        <div class="book-cover">
+        <div class="book-cover" @click="openBook(book._id)">
           <img :src="getBookCover(book)" :alt="book.name" />
         </div>
-        <div class="book-name">{{ book.name }}</div>
+        <div class="book-name" @click="openBook(book._id)">{{ book.name }}</div>
+        <div class="book-actions">
+          <button 
+            class="action-button rename-button" 
+            @click.stop="handleRenameClick(book)"
+            title="Rename book"
+          >
+            <img src="/assets/pencil.png" alt="Rename" class="action-icon" />
+          </button>
+          <button 
+            class="action-button delete-button" 
+            @click.stop="handleDeleteClick(book)"
+            title="Delete book"
+          >
+            🗑️
+          </button>
+        </div>
       </div>
       
       <div class="book-card add-book" @click="showAddBookModal = true">
@@ -23,6 +38,52 @@
           <img src="/assets/plus_sign.png" alt="Add" class="plus-icon" />
         </div>
         <div class="book-name">Add Book</div>
+      </div>
+    </div>
+    
+    <!-- Rename Book Modal -->
+    <div v-if="showRenameModal" class="modal-overlay" @click.self="closeRenameModal">
+      <div class="modal-content">
+        <h2>Rename Recipe Book</h2>
+        <form @submit.prevent="handleRenameBook">
+          <div class="form-group">
+            <label for="renameBookName">Book Name</label>
+            <input
+              id="renameBookName"
+              v-model="renameBookName"
+              type="text"
+              required
+              placeholder="Enter book name"
+              maxlength="50"
+            />
+          </div>
+          
+          <div v-if="renameError" class="error-message">{{ renameError }}</div>
+          
+          <div class="modal-actions">
+            <button type="button" @click="closeRenameModal" class="cancel-button">Cancel</button>
+            <button type="submit" :disabled="renaming" class="submit-button">
+              {{ renaming ? 'Renaming...' : 'Rename Book' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div v-if="showDeleteModal" class="modal-overlay" @click.self="closeDeleteModal">
+      <div class="modal-content">
+        <h2>Delete Recipe Book</h2>
+        <p>Are you sure you want to delete "{{ bookToDelete?.name }}"? This action cannot be undone.</p>
+        
+        <div v-if="deleteError" class="error-message">{{ deleteError }}</div>
+        
+        <div class="modal-actions">
+          <button type="button" @click="closeDeleteModal" class="cancel-button">Cancel</button>
+          <button type="button" @click="handleDeleteBook" :disabled="deleting" class="submit-button delete-confirm-button">
+            {{ deleting ? 'Deleting...' : 'Delete' }}
+          </button>
+        </div>
       </div>
     </div>
     
@@ -88,6 +149,17 @@ const selectedCoverIndex = ref(0)
 const createError = ref('')
 const creating = ref(false)
 
+const showRenameModal = ref(false)
+const renameBookName = ref('')
+const bookToRename = ref(null)
+const renameError = ref('')
+const renaming = ref(false)
+
+const showDeleteModal = ref(false)
+const bookToDelete = ref(null)
+const deleteError = ref('')
+const deleting = ref(false)
+
 // Dynamically load book covers from /assets/covers folder
 const bookCovers = ref([])
 
@@ -136,6 +208,74 @@ function closeModal() {
   newBookName.value = ''
   selectedCoverIndex.value = 0
   createError.value = ''
+}
+
+function handleRenameClick(book) {
+  bookToRename.value = book
+  renameBookName.value = book.name
+  renameError.value = ''
+  showRenameModal.value = true
+}
+
+function closeRenameModal() {
+  showRenameModal.value = false
+  renameBookName.value = ''
+  bookToRename.value = null
+  renameError.value = ''
+}
+
+async function handleRenameBook() {
+  if (!bookToRename.value || !renameBookName.value.trim()) {
+    renameError.value = 'Please enter a book name'
+    return
+  }
+  
+  // Debug: Check if function exists
+  if (typeof recipeBooksStore.editBookName !== 'function') {
+    console.error('editBookName is not a function. Available methods:', Object.keys(recipeBooksStore))
+    renameError.value = 'Edit function not available. Please refresh the page.'
+    return
+  }
+  
+  renaming.value = true
+  renameError.value = ''
+  
+  try {
+    await recipeBooksStore.editBookName(bookToRename.value._id, renameBookName.value.trim())
+    closeRenameModal()
+  } catch (err) {
+    renameError.value = err.message || 'Failed to rename book'
+  } finally {
+    renaming.value = false
+  }
+}
+
+function handleDeleteClick(book) {
+  bookToDelete.value = book
+  deleteError.value = ''
+  showDeleteModal.value = true
+}
+
+function closeDeleteModal() {
+  showDeleteModal.value = false
+  bookToDelete.value = null
+  deleteError.value = ''
+}
+
+async function handleDeleteBook() {
+  if (!bookToDelete.value) return
+  
+  deleting.value = true
+  deleteError.value = ''
+  
+  try {
+    await recipeBooksStore.deleteBook(bookToDelete.value._id)
+    closeDeleteModal()
+  } catch (err) {
+    deleteError.value = err.message || 'Failed to delete book'
+  } finally {
+    deleting.value = false
+  }
 }
 
 async function handleCreateBook() {
@@ -197,13 +337,64 @@ onMounted(async () => {
 }
 
 .book-card {
-  cursor: pointer;
+  position: relative;
   transition: transform 0.2s;
   text-align: center;
 }
 
 .book-card:hover {
   transform: translateY(-5px);
+}
+
+.book-cover {
+  cursor: pointer;
+}
+
+.book-name {
+  cursor: pointer;
+}
+
+.book-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 0.5rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.book-card:hover .book-actions {
+  opacity: 1;
+}
+
+.action-button {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.action-button:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.delete-confirm-button {
+  background-color: #d32f2f;
+}
+
+.delete-confirm-button:hover:not(:disabled) {
+  background-color: #b71c1c;
 }
 
 .book-cover {
