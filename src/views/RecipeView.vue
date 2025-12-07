@@ -8,6 +8,12 @@
       <!-- Book header with name and edit button - Outside the book -->
       <div class="book-header">
         <h1 class="book-name">{{ currentBookName }}</h1>
+        <!-- Zoom Controls (mobile only) -->
+        <div class="zoom-controls">
+          <button @click="zoomOut" class="zoom-btn" title="Zoom Out">−</button>
+          <button @click="resetZoom" class="zoom-btn" title="Reset Zoom">{{ Math.round(zoom * 100) }}%</button>
+          <button @click="zoomIn" class="zoom-btn" title="Zoom In">+</button>
+        </div>
         <div class="book-header-actions">
           <button 
             v-if="dish && dish._id && !dish._id.startsWith('temp-')"
@@ -30,7 +36,7 @@
         @touchstart="handleTouchStart"
         @touchmove="handleTouchMove"
         @touchend="handleTouchEnd"
-        :style="{ transform: `translate(${panX}px, ${panY}px)` }"
+        :style="{ transform: `translate(${panX}px, ${panY}px) scale(${zoom})` }"
       >
         <div class="notebook">
           <!-- Book pages -->
@@ -364,6 +370,10 @@ const startX = ref(0)
 const startY = ref(0)
 const initialPanX = ref(0)
 const initialPanY = ref(0)
+const zoom = ref(1)
+const initialZoom = ref(1)
+const initialDistance = ref(0)
+const isZooming = ref(false)
 
 // Sort recipes by date, newest first (for display: New button, then newest on left, then older on right)
 const sortedRecipes = computed(() => {
@@ -1514,9 +1524,55 @@ onMounted(() => {
   loadDish()
 })
 
-// Touch panning handlers for mobile
+// Touch panning and zoom handlers for mobile
 function handleTouchStart(e) {
   if (e.touches.length === 1) {
+    isPanning.value = true
+    isZooming.value = false
+    startX.value = e.touches[0].clientX
+    startY.value = e.touches[0].clientY
+    initialPanX.value = panX.value
+    initialPanY.value = panY.value
+  } else if (e.touches.length === 2) {
+    isPanning.value = false
+    isZooming.value = true
+    const touch1 = e.touches[0]
+    const touch2 = e.touches[1]
+    initialDistance.value = Math.hypot(
+      touch2.clientX - touch1.clientX,
+      touch2.clientY - touch1.clientY
+    )
+    initialZoom.value = zoom.value
+  }
+}
+
+function handleTouchMove(e) {
+  if (e.touches.length === 2 && isZooming.value) {
+    e.preventDefault()
+    const touch1 = e.touches[0]
+    const touch2 = e.touches[1]
+    const currentDistance = Math.hypot(
+      touch2.clientX - touch1.clientX,
+      touch2.clientY - touch1.clientY
+    )
+    const scale = currentDistance / initialDistance.value
+    zoom.value = Math.max(0.5, Math.min(2, initialZoom.value * scale))
+  } else if (isPanning.value && e.touches.length === 1) {
+    e.preventDefault()
+    const deltaX = e.touches[0].clientX - startX.value
+    const deltaY = e.touches[0].clientY - startY.value
+    
+    panX.value = initialPanX.value + deltaX
+    panY.value = initialPanY.value + deltaY
+  }
+}
+
+function handleTouchEnd(e) {
+  if (e.touches.length === 0) {
+    isPanning.value = false
+    isZooming.value = false
+  } else if (e.touches.length === 1) {
+    isZooming.value = false
     isPanning.value = true
     startX.value = e.touches[0].clientX
     startY.value = e.touches[0].clientY
@@ -1525,19 +1581,18 @@ function handleTouchStart(e) {
   }
 }
 
-function handleTouchMove(e) {
-  if (!isPanning.value || e.touches.length !== 1) return
-  
-  e.preventDefault()
-  const deltaX = e.touches[0].clientX - startX.value
-  const deltaY = e.touches[0].clientY - startY.value
-  
-  panX.value = initialPanX.value + deltaX
-  panY.value = initialPanY.value + deltaY
+function zoomIn() {
+  zoom.value = Math.min(2, zoom.value + 0.25)
 }
 
-function handleTouchEnd(e) {
-  isPanning.value = false
+function zoomOut() {
+  zoom.value = Math.max(0.5, zoom.value - 0.25)
+}
+
+function resetZoom() {
+  zoom.value = 1
+  panX.value = 0
+  panY.value = 0
 }
 </script>
 
@@ -2444,6 +2499,37 @@ function handleTouchEnd(e) {
     background-color: var(--color-cream);
     padding: 1rem;
     margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .zoom-controls {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+  }
+  
+  .zoom-btn {
+    padding: 0.5rem 1rem;
+    background-color: var(--color-light-brown);
+    color: var(--color-dark-brown);
+    border: 2px solid var(--color-medium-brown);
+    border-radius: 4px;
+    font-size: 1.2rem;
+    font-weight: 600;
+    cursor: pointer;
+    min-width: 60px;
+    transition: background-color 0.2s;
+  }
+  
+  .zoom-btn:hover {
+    background-color: var(--color-gold);
+  }
+  
+  .zoom-btn:active {
+    transform: scale(0.95);
   }
   
   .panable-container {
@@ -2457,6 +2543,7 @@ function handleTouchEnd(e) {
     transition: transform 0.1s ease-out;
     flex: 1;
     overflow: visible;
+    transform-origin: top left;
   }
   
   .panable-container:active {

@@ -119,7 +119,11 @@ export const useCalendarStore = defineStore('calendar', () => {
         if (update.type === 'delete') {
           deletesSet.add(update.scheduledRecipe)
           // Remove any moves for this scheduled recipe
-          movesByScheduledId.delete(update.scheduledRecipe)
+          // This ensures that if an item is moved then deleted, the move is canceled
+          if (movesByScheduledId.has(update.scheduledRecipe)) {
+            console.log('Canceling move for scheduled recipe that is being deleted:', update.scheduledRecipe)
+            movesByScheduledId.delete(update.scheduledRecipe)
+          }
         }
       }
       
