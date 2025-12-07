@@ -1331,8 +1331,9 @@ function handleTouchEnd(e) {
   }
   
   .calendar-controls {
-    flex-direction: column;
+    flex-direction: row;
     gap: 1rem;
+    flex-wrap: wrap;
   }
 }
 </style>

@@ -1682,11 +1682,11 @@ function handleTouchEnd(e) {
   }
   
   .pages-container {
-    flex-direction: column;
+    flex-direction: row;
   }
   
   .pages-container::before {
-    display: none;
+    display: block;
   }
   
   .bookmarks {
