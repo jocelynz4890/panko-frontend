@@ -1,12 +1,22 @@
 import axios from 'axios'
 
+// In production, if VITE_API_BASE_URL is not set, default to '/api'
+// In development, the Vite proxy will handle '/api' -> localhost:8000
+// In production, '/api' should be handled by a reverse proxy or set VITE_API_BASE_URL to the full backend URL
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+
+// Log API base URL for debugging (only in development or if explicitly set)
+if (import.meta.env.DEV || import.meta.env.VITE_API_BASE_URL) {
+  console.log('API Base URL:', API_BASE)
+}
+
 const api = axios.create({
   baseURL: API_BASE,
   headers: {
     'Content-Type': 'application/json'
   },
-  timeout: 30000 // 30 seconds timeout (backend default is 10s, but allow more time)
+  timeout: 30000, // 30 seconds timeout (backend default is 10s, but allow more time)
+  withCredentials: false // Set to true if backend requires credentials
 })
 
 // Helper function to get token from localStorage
@@ -33,7 +43,16 @@ api.interceptors.response.use(
     return response
   },
   (error) => {
-    console.error('API Error:', error.config?.url, error.response?.data || error.message)
+    console.error('API Error:', {
+      url: error.config?.url,
+      baseURL: error.config?.baseURL,
+      fullURL: error.config?.baseURL + error.config?.url,
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      code: error.code
+    })
+    
     if (error.response?.data?.error) {
       return Promise.reject(new Error(error.response.data.error))
     }
@@ -44,7 +63,13 @@ api.interceptors.response.use(
       return Promise.reject(new Error('API endpoint not found'))
     }
     if (!error.response) {
-      return Promise.reject(new Error('Network error. Please check your connection.'))
+      // Network error - provide more helpful message
+      const errorMsg = error.code === 'ECONNREFUSED' 
+        ? 'Cannot connect to server. Please check if the backend is running and VITE_API_BASE_URL is configured correctly.'
+        : error.code === 'ERR_NETWORK'
+        ? 'Network error. Please check your connection and ensure the backend server is accessible.'
+        : 'Network error. Please check your connection.'
+      return Promise.reject(new Error(errorMsg))
     }
     return Promise.reject(error)
   }
