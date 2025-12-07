@@ -1062,22 +1062,56 @@ function formatDate(dateString) {
 
 function formatMarkdown(text) {
   if (!text) return ''
-  // Simple markdown formatting
-  let formatted = text
-    // Bullet points first (before other replacements)
-    .replace(/^[-*+]\s+(.+)$/gm, '<li>$1</li>')
-    // Wrap consecutive list items in ul
-    .replace(/(<li>.*?<\/li>(?:\s*<li>.*?<\/li>)*)/gs, '<ul>$1</ul>')
-    // Bold
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    // Italic (but not if it's part of bold)
-    .replace(/(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
-    // Code
-    .replace(/`(.*?)`/g, '<code>$1</code>')
-    // Line breaks (but preserve in lists)
-    .replace(/(?<!<\/li>)\n(?!<li>)/g, '<br>')
   
-  return formatted
+  // Split text into lines for better processing
+  const lines = text.split('\n')
+  const result = []
+  let inList = false
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    
+    // Check if this is a bullet point
+    const bulletMatch = line.match(/^[-*+]\s+(.+)$/)
+    
+    if (bulletMatch) {
+      // Start a list if we're not in one
+      if (!inList) {
+        result.push('<ul>')
+        inList = true
+      }
+      // Add the list item
+      result.push(`<li>${bulletMatch[1]}</li>`)
+    } else {
+      // Close list if we were in one
+      if (inList) {
+        result.push('</ul>')
+        inList = false
+      }
+      
+      // Handle non-list content
+      if (line) {
+        let processedLine = line
+          // Bold
+          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          // Italic (but not if it's part of bold)
+          .replace(/(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
+          // Code
+          .replace(/`(.*?)`/g, '<code>$1</code>')
+        result.push(processedLine + '<br>')
+      } else if (i < lines.length - 1) {
+        // Empty line (but not the last line)
+        result.push('<br>')
+      }
+    }
+  }
+  
+  // Close list if still open
+  if (inList) {
+    result.push('</ul>')
+  }
+  
+  return result.join('')
 }
 
 function getActiveTabColor() {
@@ -1485,6 +1519,7 @@ onMounted(() => {
   margin-bottom: 0;
   border-bottom: none;
   padding-bottom: 0;
+  font-family: 'Caveat', cursive;
 }
 
 .recipe-header .recipe-name.untitled-dish {
@@ -1506,9 +1541,10 @@ onMounted(() => {
 .recipe-header-row .recipe-name {
   font-size: 1.2rem;
   color: var(--color-medium-brown);
-  font-weight: normal;
-  font-style: italic;
+  font-weight: 500;
+  font-style: normal;
   margin: 0;
+  font-family: 'Caveat', cursive;
 }
 
 .set-default-header-btn {
@@ -1573,7 +1609,8 @@ onMounted(() => {
   background: transparent;
   border: none;
   border-bottom: 2px solid var(--color-medium-brown);
-  font-family: inherit;
+  font-family: 'Caveat', cursive;
+  font-weight: 500;
 }
 
 .recipe-name-input:focus {
@@ -1581,17 +1618,17 @@ onMounted(() => {
   border-bottom-color: var(--color-dark-brown);
 }
 
-.recipe-name-input {
+.recipe-header-row .recipe-name-input {
   font-size: 1.2rem;
   color: var(--color-medium-brown);
-  font-weight: normal;
-  font-style: italic;
+  font-weight: 500;
+  font-style: normal;
   width: 100%;
   padding: 0.25rem;
   border: 2px solid var(--color-medium-brown);
   border-radius: 4px;
   background-color: white;
-  font-family: inherit;
+  font-family: 'Caveat', cursive;
   margin-top: 0.5rem;
 }
 
@@ -1681,10 +1718,15 @@ onMounted(() => {
 .meta-label {
   font-weight: 600;
   color: var(--color-dark-brown);
+  font-family: 'Caveat', cursive;
+  font-size: 1.1rem;
 }
 
 .meta-value {
   color: var(--color-medium-brown);
+  font-family: 'Caveat', cursive;
+  font-size: 1.1rem;
+  font-weight: 400;
 }
 
 .meta-input,
@@ -1694,6 +1736,8 @@ onMounted(() => {
   border-radius: 4px;
   background-color: white;
   font-size: 0.9rem;
+  font-family: 'Caveat', cursive;
+  font-weight: 500;
 }
 
 .meta-item {
@@ -1908,12 +1952,39 @@ onMounted(() => {
   margin-bottom: 0.75rem;
   border-bottom: 1px solid var(--color-light-brown);
   padding-bottom: 0.25rem;
+  font-family: 'Caveat', cursive;
+  font-weight: 600;
 }
 
 .section-content {
   color: var(--color-dark-brown);
   white-space: pre-wrap;
   line-height: 1.6;
+  font-family: 'Caveat', cursive;
+  font-size: 1.2rem;
+  font-weight: 400;
+}
+
+.section-content ul {
+  margin: 0.25rem 0;
+  padding-left: 3.5rem;
+  list-style: none;
+}
+
+.section-content ul li {
+  margin: 0.1rem 0;
+  padding: 0;
+  padding-left: 1rem;
+  position: relative;
+  line-height: 1.4;
+}
+
+.section-content ul li::before {
+  content: '•';
+  position: absolute;
+  left: -2.5rem;
+  color: var(--color-medium-brown);
+  font-weight: 600;
 }
 
 .section-content code {
@@ -1934,13 +2005,15 @@ onMounted(() => {
 
 .section-input {
   width: 100%;
-  padding: 0.75rem;
+  padding: 0.75rem 0.75rem 0.75rem 1.5rem;
   border: 2px solid var(--color-light-brown);
   border-radius: 4px;
-  font-size: 1rem;
-  font-family: inherit;
+  font-size: 1.1rem;
+  font-family: 'Caveat', cursive;
+  font-weight: 400;
   resize: vertical;
   background-color: white;
+  line-height: 1.8;
 }
 
 .section-input:focus {

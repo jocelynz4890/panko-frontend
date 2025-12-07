@@ -489,8 +489,10 @@ onMounted(async () => {
   padding: 0.75rem;
   border: 2px solid var(--color-light-brown);
   border-radius: 4px;
-  font-size: 1rem;
+  font-size: 1.2rem;
   background-color: var(--color-cream);
+  font-family: 'Caveat', cursive;
+  font-weight: 500;
 }
 
 .cover-carousel {

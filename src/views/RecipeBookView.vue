@@ -1492,6 +1492,8 @@ watch(() => route.query.refresh, () => {
   border-radius: 4px;
   font-size: 1rem;
   background-color: var(--color-cream);
+  font-family: 'Caveat', cursive;
+  font-size: 1.2rem;
 }
 
 .modal-actions {
