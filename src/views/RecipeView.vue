@@ -130,9 +130,17 @@
                   class="star-icon"
                 />
               </div>
-              <select v-else v-model.number="editableRecipe.ranking" class="rating-select">
-                <option v-for="i in 5" :key="i" :value="i">{{ i }} Star{{ i > 1 ? 's' : '' }}</option>
-              </select>
+              <div v-else class="stars-editor">
+                <img
+                  v-for="i in 5"
+                  :key="i"
+                  :src="i <= (editableRecipe.ranking || 0) ? '/assets/filled_in_star.png' : '/assets/blank_star.png'"
+                  alt="star"
+                  class="star-icon star-clickable"
+                  @click="editableRecipe.ranking = i"
+                  :title="`${i} star${i > 1 ? 's' : ''}`"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -187,7 +195,12 @@
                   rows="8"
                   placeholder="Enter ingredients..."
                 ></textarea>
-                <div v-else class="section-content" v-html="formatMarkdown(editableRecipe.ingredientsList || currentRecipe?.ingredientsList || 'No ingredients listed')"></div>
+                <div 
+                  v-else 
+                  class="section-content" 
+                  :class="{ 'empty-content': !(editableRecipe.ingredientsList || currentRecipe?.ingredientsList) }"
+                  v-html="formatMarkdown(editableRecipe.ingredientsList || currentRecipe?.ingredientsList || 'No ingredients listed')"
+                ></div>
               </div>
               
               <div class="section" :class="{ editable: editMode }">
@@ -202,7 +215,12 @@
                   rows="10"
                   placeholder="Enter instructions..."
                 ></textarea>
-                <div v-else class="section-content" v-html="formatMarkdown(editableRecipe.instructions || currentRecipe?.instructions || 'No instructions listed')"></div>
+                <div 
+                  v-else 
+                  class="section-content" 
+                  :class="{ 'empty-content': !(editableRecipe.instructions || currentRecipe?.instructions) }"
+                  v-html="formatMarkdown(editableRecipe.instructions || currentRecipe?.instructions || 'No instructions listed')"
+                ></div>
               </div>
               
               <div class="section" :class="{ editable: editMode }">
@@ -217,7 +235,12 @@
                   rows="6"
                   placeholder="Enter notes..."
                 ></textarea>
-                <div v-else class="section-content" v-html="formatMarkdown(editableRecipe.note || currentRecipe?.note || 'No notes')"></div>
+                <div 
+                  v-else 
+                  class="section-content" 
+                  :class="{ 'empty-content': !(editableRecipe.note || currentRecipe?.note) }"
+                  v-html="formatMarkdown(editableRecipe.note || currentRecipe?.note || 'No notes')"
+                ></div>
               </div>
             </div>
           </div>
@@ -1602,20 +1625,18 @@ onMounted(() => {
 .recipe-name-input {
   font-size: 2rem;
   color: var(--color-dark-brown);
-  margin-bottom: 0.5rem;
-  border-bottom: 2px solid var(--color-light-brown);
-  padding-bottom: 0.5rem;
+  margin-bottom: 0;
+  padding-bottom: 0;
   width: 100%;
   background: transparent;
   border: none;
-  border-bottom: 2px solid var(--color-medium-brown);
+  border-bottom: none;
   font-family: 'Caveat', cursive;
   font-weight: 500;
 }
 
 .recipe-name-input:focus {
   outline: none;
-  border-bottom-color: var(--color-dark-brown);
 }
 
 .recipe-header-row .recipe-name-input {
@@ -1763,6 +1784,11 @@ onMounted(() => {
   gap: 0.25rem;
 }
 
+.stars-editor {
+  display: flex;
+  gap: 0.25rem;
+}
+
 .star-icon {
   width: 24px;
   height: 24px;
@@ -1770,6 +1796,16 @@ onMounted(() => {
 
 .star-icon.empty {
   opacity: 0.3;
+}
+
+.star-icon.star-clickable {
+  cursor: pointer;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.star-icon.star-clickable:hover {
+  transform: scale(1.2);
+  opacity: 0.8;
 }
 
 .tab-content-wrapper {
@@ -1963,18 +1999,26 @@ onMounted(() => {
   font-family: 'Caveat', cursive;
   font-size: 1.2rem;
   font-weight: 400;
+  padding: 0.75rem 0.75rem 0.75rem 1.5rem;
+}
+
+.section-content.empty-content {
+  color: #999;
+  opacity: 0.6;
+  font-style: italic;
 }
 
 .section-content ul {
   margin: 0.25rem 0;
-  padding-left: 3.5rem;
+  padding-left: 4rem !important;
   list-style: none;
+  margin-left: 1rem;
 }
 
 .section-content ul li {
   margin: 0.1rem 0;
   padding: 0;
-  padding-left: 1rem;
+  padding-left: 1.5rem !important;
   position: relative;
   line-height: 1.4;
 }
@@ -1982,9 +2026,10 @@ onMounted(() => {
 .section-content ul li::before {
   content: '•';
   position: absolute;
-  left: -2.5rem;
+  left: -3rem !important;
   color: var(--color-medium-brown);
   font-weight: 600;
+  font-size: 1.3rem;
 }
 
 .section-content code {
