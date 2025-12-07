@@ -1615,6 +1615,7 @@ onMounted(() => {
   width: 18px;
   height: 18px;
   margin-right: 0.25rem;
+  object-fit: contain;
 }
 
 .pages-container {
@@ -1885,6 +1886,7 @@ onMounted(() => {
 .edit-indicator-icon {
   width: 16px;
   height: 16px;
+  object-fit: contain;
 }
 
 .upload-image-btn {
