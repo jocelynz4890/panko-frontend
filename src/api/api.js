@@ -5,10 +5,8 @@ import axios from 'axios'
 // In production, '/api' should be handled by a reverse proxy or set VITE_API_BASE_URL to the full backend URL
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
-// Log API base URL for debugging (only in development or if explicitly set)
-if (import.meta.env.DEV || import.meta.env.VITE_API_BASE_URL) {
-  console.log('API Base URL:', API_BASE)
-}
+// Always log API base URL for debugging (helps diagnose production issues)
+console.log('[API Config] Base URL:', API_BASE, '| Mode:', import.meta.env.MODE, '| Dev:', import.meta.env.DEV)
 
 const api = axios.create({
   baseURL: API_BASE,
