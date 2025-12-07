@@ -1,6 +1,6 @@
 <template>
   <div class="calendar-container">
-    <h1 class="page-title">Cooking Scheduling Calendar</h1>
+    <h1 class="page-title">Cooking Calendar</h1>
     
     <div v-if="loading" class="loading">Loading...</div>
     <div v-if="error" class="error">{{ error }}</div>
@@ -703,14 +703,37 @@ function confirmRemoveScheduled() {
   const scheduledRecipeId = pendingDeleteScheduledId.value
   if (!scheduledRecipeId) return
   
-  // Check if it's a pending update
-  const pendingIndex = calendarStore.pendingUpdates.findIndex(
-    u => u.type === 'add' && u.scheduledRecipe === scheduledRecipeId
+  // Find the scheduled item to get its recipe and date
+  const scheduledItem = scheduledRecipesData.value.find(
+    item => item.scheduledRecipe._id === scheduledRecipeId
   )
   
-  if (pendingIndex !== -1) {
-    // Remove from pending updates
-    calendarStore.pendingUpdates.splice(pendingIndex, 1)
+  // Check if it's a pending 'add' update (match by recipe+date since adds don't have scheduledRecipe ID yet)
+  let pendingAddIndex = -1
+  if (scheduledItem && scheduledRecipeId.startsWith('pending-')) {
+    // This is a pending add - match by recipe and date
+    pendingAddIndex = calendarStore.pendingUpdates.findIndex(
+      u => u.type === 'add' && 
+           u.recipe === scheduledItem.recipe && 
+           u.date === scheduledItem.date
+    )
+  }
+  
+  // Check if it's a pending 'move' update
+  const pendingMoveIndex = calendarStore.pendingUpdates.findIndex(
+    u => u.type === 'move' && u.oldScheduledRecipe === scheduledRecipeId
+  )
+  
+  if (pendingAddIndex !== -1) {
+    // Remove from pending updates (was just added, not saved yet)
+    calendarStore.pendingUpdates.splice(pendingAddIndex, 1)
+  } else if (pendingMoveIndex !== -1) {
+    // Cancel the move and add delete instead
+    calendarStore.pendingUpdates.splice(pendingMoveIndex, 1)
+    calendarStore.addPendingUpdate({
+      type: 'delete',
+      scheduledRecipe: scheduledRecipeId
+    })
   } else {
     // Add to pending deletes
     calendarStore.addPendingUpdate({

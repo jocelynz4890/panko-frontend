@@ -102,20 +102,45 @@ export const useCalendarStore = defineStore('calendar', () => {
     loading.value = true
     error.value = null
     try {
-      // Separate updates by type
-      const adds = []
-      const deletes = []
-      const moves = []
-      
+      // Resolve conflicts before processing
+      // 1. If an item is moved multiple times, keep only the final move
+      const movesByScheduledId = new Map()
       for (const update of pendingUpdates.value) {
-        if (update.type === 'add') {
-          adds.push(update)
-        } else if (update.type === 'delete') {
-          deletes.push(update)
-        } else if (update.type === 'move') {
-          moves.push(update)
+        if (update.type === 'move') {
+          const scheduledId = update.oldScheduledRecipe
+          // Keep the most recent move (last one in array)
+          movesByScheduledId.set(scheduledId, update)
         }
       }
+      
+      // 2. If an item is both moved and deleted, cancel the move and just delete
+      const deletesSet = new Set()
+      for (const update of pendingUpdates.value) {
+        if (update.type === 'delete') {
+          deletesSet.add(update.scheduledRecipe)
+          // Remove any moves for this scheduled recipe
+          movesByScheduledId.delete(update.scheduledRecipe)
+        }
+      }
+      
+      // 3. If an item is added and then deleted, cancel the add
+      const addsToKeep = []
+      for (const update of pendingUpdates.value) {
+        if (update.type === 'add') {
+          // Check if this add is being deleted
+          // For adds, we need to check if the scheduledRecipe (if it exists) is being deleted
+          // But adds don't have scheduledRecipe yet, so we need to check by recipe+date
+          // Actually, deletes reference scheduledRecipe IDs, not recipe+date
+          // So we can't easily match adds to deletes. We'll keep all adds for now.
+          // The backend will handle duplicates.
+          addsToKeep.push(update)
+        }
+      }
+      
+      // Separate updates by type (after conflict resolution)
+      const adds = addsToKeep
+      const deletes = pendingUpdates.value.filter(u => u.type === 'delete')
+      const moves = Array.from(movesByScheduledId.values())
       
       // Process in batches to avoid overwhelming the backend
       const BATCH_SIZE = 5
