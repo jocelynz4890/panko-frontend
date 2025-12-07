@@ -28,7 +28,7 @@
             @click.stop="handleDeleteClick(book)"
             title="Delete book"
           >
-            🗑️
+            <img src="/assets/trash_bin.png" alt="Delete" class="action-icon" />
           </button>
         </div>
       </div>
@@ -383,6 +383,7 @@ onMounted(async () => {
 .action-icon {
   width: 20px;
   height: 20px;
+  object-fit: contain;
 }
 
 .action-button:hover {

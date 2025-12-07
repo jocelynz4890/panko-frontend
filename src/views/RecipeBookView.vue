@@ -13,7 +13,8 @@
             Rename
           </button>
           <button @click="handleDeleteClick" class="action-btn delete-btn" title="Delete book">
-            🗑️ Delete
+            <img src="/assets/trash_bin.png" alt="Delete" class="action-icon" />
+            Delete
           </button>
           <button @click="handleAddRecipe" class="add-recipe-btn" :disabled="addingRecipe">
             <img src="/assets/plus_sign.png" alt="Add" class="plus-icon" />
@@ -419,7 +420,15 @@ function getDishDate(dishId) {
 
 function formatRecipeDate(dateString) {
   if (!dateString) return ''
-  const date = new Date(dateString)
+  // Parse date string as local date to avoid timezone issues
+  let date
+  if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    // Parse as local date to avoid UTC timezone issues
+    const [year, month, day] = dateString.split('-').map(Number)
+    date = new Date(year, month - 1, day)
+  } else {
+    date = new Date(dateString)
+  }
   if (isNaN(date.getTime())) return ''
   
   // Format as MM/DD/YYYY
@@ -825,6 +834,7 @@ watch(() => route.query.refresh, () => {
 .action-icon {
   width: 18px;
   height: 18px;
+  object-fit: contain;
 }
 
 .rename-btn {

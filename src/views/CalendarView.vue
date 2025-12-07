@@ -267,13 +267,16 @@ async function loadData() {
           const response = await recipeAPI.getRecipes(dish._id)
           const recipesData = response.data.recipes || response.data
           const recipes = Array.isArray(recipesData) ? recipesData : []
-          return recipes.map(recipe => ({
-            _id: recipe._id,
-            dishId: dish._id,
-            dishName: dish.name,
-            name: recipe.subname || null,
-            date: recipe.date || null
-          }))
+          // Filter out any null/undefined recipes and ensure recipe has _id
+          return recipes
+            .filter(recipe => recipe && recipe._id) // Only include valid recipes
+            .map(recipe => ({
+              _id: recipe._id,
+              dishId: dish._id,
+              dishName: dish.name,
+              name: recipe.subname || null,
+              date: recipe.date || null
+            }))
         } catch (err) {
           console.error(`Failed to load recipes for dish ${dish._id}:`, err)
           return []
@@ -283,8 +286,14 @@ async function loadData() {
     })
     
     // Wait for all recipes to load and flatten results
+    // Filter out any invalid recipes and ensure all have required fields
     const results = await Promise.all(recipePromises)
-    const allRecipes = results.flat()
+    const allRecipes = results.flat().filter(recipe => 
+      recipe && 
+      recipe._id && 
+      recipe.dishId && 
+      recipe.dishName
+    )
     // Sort recipes by date (newest first)
     allRecipes.sort((a, b) => {
       const dateA = a.date ? new Date(a.date) : new Date(0)
@@ -294,6 +303,7 @@ async function loadData() {
     availableRecipes.value = allRecipes
     
     // Build scheduled recipes data with dish names
+    // Filter out scheduled recipes that reference deleted recipes
     scheduledRecipesData.value = []
     
     // Match scheduled recipes to our loaded recipes
@@ -319,36 +329,28 @@ async function loadData() {
           dishId: recipe.dishId
         })
       } else {
-        // If recipe not found, mark for lookup
-        scheduledRecipesData.value.push({
-          scheduledRecipe: scheduled,
-          dishName: 'Loading...',
-          recipeName: null,
-          date: normalizedDate,
-          recipe: scheduled.recipe,
-          needsLookup: true
-        })
-      }
-    }
-    
-    // Lookup recipes that weren't found in the initial load
-    for (const item of scheduledRecipesData.value) {
-      if (item.needsLookup) {
-        // Search through recipe books to find this recipe
+        // Recipe not found in initial load - try to lookup
+        // But don't add "Unknown" items - filter them out if not found
         let found = false
+        // Search through recipe books to find this recipe
         for (const book of recipeBooksStore.books) {
           if (book.dishes && book.dishes.length > 0) {
             for (const dishId of book.dishes) {
               try {
                 await recipesStore.fetchRecipes(dishId)
-                const recipe = recipesStore.recipes.find(r => r._id === item.recipe)
-                if (recipe) {
+                const foundRecipe = recipesStore.recipes.find(r => r._id === scheduled.recipe)
+                if (foundRecipe) {
                   await recipesStore.fetchDish(dishId)
                   const dish = recipesStore.currentDish
                   if (dish) {
-                    item.dishName = dish.name
-                    item.recipeName = recipe.subname || 'Untitled'
-                    item.dishId = dishId
+                    scheduledRecipesData.value.push({
+                      scheduledRecipe: scheduled,
+                      dishName: dish.name,
+                      recipeName: foundRecipe.subname || 'Default',
+                      date: normalizedDate,
+                      recipe: scheduled.recipe,
+                      dishId: dishId
+                    })
                     found = true
                     break
                   }
@@ -360,11 +362,12 @@ async function loadData() {
             if (found) break
           }
         }
+        // If recipe still not found after lookup, it was deleted - skip it (don't add to scheduledRecipesData)
+        // The backend sync should have removed it, but if it's still in the list, filter it out
         if (!found) {
-          item.dishName = 'Unknown Dish'
-          item.recipeName = 'Unknown Recipe'
+          console.warn(`Scheduled recipe references deleted recipe ${scheduled.recipe} - filtering out`)
+          // Don't add to scheduledRecipesData - effectively filters it out
         }
-        delete item.needsLookup
       }
     }
   } catch (err) {
@@ -419,7 +422,16 @@ function handleDragStartRecipe(event, recipe) {
 function formatDateShort(dateString) {
   if (!dateString) return null
   try {
-    const date = new Date(dateString)
+    // Parse date string as local date to avoid timezone issues
+    let date
+    if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      // Parse as local date to avoid UTC timezone issues
+      const [year, month, day] = dateString.split('-').map(Number)
+      date = new Date(year, month - 1, day)
+    } else {
+      date = new Date(dateString)
+    }
+    if (isNaN(date.getTime())) return dateString
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   } catch {
     return dateString

@@ -99,8 +99,8 @@
               <button @click="triggerImageUpload" class="upload-image-btn">Upload Image</button>
             </div>
             <img
-              v-if="currentRecipe && currentRecipe.pictures && currentRecipe.pictures.length > 0"
-              :src="currentRecipe.pictures[0]"
+              v-if="getDisplayImage()"
+              :src="getDisplayImage()"
               :alt="dish.name"
               class="recipe-image"
             />
@@ -152,17 +152,7 @@
             <!-- Recipe Tabs - Manila folder style, overlapping, right-aligned -->
             <div class="recipe-tabs-container">
               <div class="recipe-tabs" ref="tabsContainer">
-              <!-- New Recipe Tab - Always first (leftmost) -->
-              <div
-                class="recipe-tab new-tab"
-                :class="{ active: isNewRecipe }"
-                @click="createNewRecipe"
-              >
-                <img src="/assets/plus_sign.png" alt="New" class="plus-icon" />
-                New
-              </div>
-              
-              <!-- Existing recipes - newest first, oldest last (left to right after new button) -->
+              <!-- Existing recipes - displayed first (left to right) -->
               <div
                 v-for="(recipe, index) in sortedRecipes"
                 :key="recipe._id || index"
@@ -175,6 +165,16 @@
               >
                 <span class="tab-label">{{ formatDateShort(recipe.date) || recipe.subname || `Recipe ${index + 1}` }}</span>
                 <img v-if="dish && recipe._id === dish.defaultRecipe" src="/assets/filled_in_star.png" alt="Default" class="default-icon" title="Default Recipe" />
+              </div>
+              
+              <!-- New Recipe Tab - Always last (rightmost) -->
+              <div
+                class="recipe-tab new-tab"
+                :class="{ active: isNewRecipe }"
+                @click="createNewRecipe"
+              >
+                <img src="/assets/plus_sign.png" alt="New" class="plus-icon" />
+                New
               </div>
               </div>
             </div>
@@ -256,9 +256,9 @@
             title="Go to Table of Contents"
           >
             <img src="/assets/table_of_contents_bookmark_horizontal.png" alt="Table of Contents" class="bookmark-bg" />
-            <img src="/assets/home_navbar.png" alt="Home" class="bookmark-overlay" />
+            <img src="/assets/home_navbar.png" alt="Home" class="bookmark-overlay bookmark-home-overlay" />
             <img src="/assets/bookmark_on_hover_horizontal.png" alt="Table of Contents" class="bookmark-bg-hover" />
-            <img src="/assets/home_navbar.png" alt="Home" class="bookmark-overlay-hover" />
+            <img src="/assets/home_navbar.png" alt="Home" class="bookmark-overlay-hover bookmark-home-overlay" />
           </div>
           <div
             class="bookmark bookmark-rankings"
@@ -350,19 +350,56 @@ const imageUploadRef = ref(null)
 const showDeleteRecipeDialog = ref(false)
 const showDeleteDishDialog = ref(false)
 
-// Sort recipes by date, newest first (for display: New button, then newest, then older)
+// Sort recipes by date, newest first (for display: New button, then newest on left, then older on right)
 const sortedRecipes = computed(() => {
   return [...recipesStore.recipes].sort((a, b) => {
-    const dateA = new Date(a.date || 0)
-    const dateB = new Date(b.date || 0)
-    return dateB - dateA // Most recent first (newest first)
+    // Parse dates as local dates to avoid timezone issues
+    const parseLocalDate = (dateString) => {
+      if (!dateString) return new Date(0) // Recipes without dates go to the end (rightmost)
+      if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const [year, month, day] = dateString.split('-').map(Number)
+        return new Date(year, month - 1, day)
+      }
+      return new Date(dateString)
+    }
+    const dateA = parseLocalDate(a.date)
+    const dateB = parseLocalDate(b.date)
+    // Sort: newest first (on left), oldest last (on right)
+    // JavaScript sort: return < 0 means a comes before b, return > 0 means b comes before a
+    // If newest recipes are appearing on the RIGHT, we need to reverse the sort
+    // Current logic dateB - dateA should put newest first, but it's putting them last
+    // Reverse: dateA - dateB will put the newer date first
+    // If dateA is newer: positive → a before b → newest on left ✓
+    // If dateB is newer: negative → a before b → but a is older, so oldest on left ✗
+    // Actually that doesn't work either. Let me think...
+    // If dateB - dateA puts newest on RIGHT, then we want the opposite
+    // The opposite of dateB - dateA is dateA - dateB
+    // But dateA - dateB: if dateA newer → positive → a before b → newest on left? 
+    // No wait: if dateA is newer and a comes before b, then newest is on left ✓
+    // So let's try dateA - dateB
+    const timeDiff = dateA.getTime() - dateB.getTime()
+    // If dates are equal, maintain original order (stable sort)
+    if (timeDiff === 0) {
+      return 0
+    }
+    // Reverse the sort to put newest on left
+    return timeDiff
   })
 })
 
 // Format date as mm/dd/yy
+// Parses date string as local date to avoid timezone issues
 function formatDateShort(dateString) {
   if (!dateString) return ''
-  const date = new Date(dateString)
+  // Parse date string as local date (YYYY-MM-DD format)
+  let date
+  if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    // Parse as local date to avoid UTC timezone issues
+    const [year, month, day] = dateString.split('-').map(Number)
+    date = new Date(year, month - 1, day)
+  } else {
+    date = new Date(dateString)
+  }
   if (isNaN(date.getTime())) return ''
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
@@ -658,53 +695,59 @@ async function handleImageUpload(event) {
   const file = event.target.files?.[0]
   if (!file) return
   
-  // Need a recipe ID to upload - create one if we don't have it yet
-  let recipeId = currentRecipe.value?._id
-  if (!recipeId && dish.value?._id) {
-    // Create a new recipe first if we don't have one
+  const recipeId = currentRecipe.value?._id
+  
+  // If we have a recipe ID, upload immediately
+  if (recipeId) {
     try {
-      recipeId = await recipesStore.createRecipe({
-        dish: dish.value._id,
-        ingredientsList: editableRecipe.value.ingredientsList,
-        subname: editableRecipe.value.subname || 'New Recipe',
-        pictures: [],
-        date: editableRecipe.value.date,
-        instructions: editableRecipe.value.instructions,
-        note: editableRecipe.value.note,
-        ranking: editableRecipe.value.ranking
-      })
+      saving.value = true
+      const result = await recipesStore.uploadRecipeImage(recipeId, file)
+      if (result?.image?.secureUrl) {
+        // Add the uploaded image URL to the pictures array
+        if (!editableRecipe.value.pictures) {
+          editableRecipe.value.pictures = []
+        }
+        editableRecipe.value.pictures.push(result.image.secureUrl)
+        // Update the current recipe if it exists
+        if (currentRecipe.value) {
+          currentRecipe.value.pictures = [...editableRecipe.value.pictures]
+        }
+      }
     } catch (err) {
-      error.value = 'Failed to create recipe for image upload: ' + err.message
-      return
+      error.value = 'Failed to upload image: ' + err.message
+    } finally {
+      saving.value = false
+      // Reset the file input
+      if (imageUploadRef.value) {
+        imageUploadRef.value.value = ''
+      }
     }
-  }
-  
-  if (!recipeId) {
-    error.value = 'Cannot upload image: no recipe ID available'
-    return
-  }
-  
-  try {
-    saving.value = true
-    const result = await recipesStore.uploadRecipeImage(recipeId, file)
-    if (result?.image?.secureUrl) {
-      // Add the uploaded image URL to the pictures array
+  } else {
+    // No recipe ID yet - store the file temporarily and create a preview
+    // The image will be uploaded when the user saves the recipe
+    try {
+      // Create a preview URL for the image
+      const previewUrl = URL.createObjectURL(file)
+      
+      // Store the file and preview in a temporary structure
       if (!editableRecipe.value.pictures) {
         editableRecipe.value.pictures = []
       }
-      editableRecipe.value.pictures.push(result.image.secureUrl)
-      // Update the current recipe if it exists
-      if (currentRecipe.value) {
-        currentRecipe.value.pictures = [...editableRecipe.value.pictures]
+      
+      // Store as an object with the file and preview URL
+      // We'll use a special format: { file: File, preview: string, isPending: true }
+      editableRecipe.value.pictures.push({
+        file: file,
+        preview: previewUrl,
+        isPending: true
+      })
+    } catch (err) {
+      error.value = 'Failed to process image: ' + err.message
+    } finally {
+      // Reset the file input
+      if (imageUploadRef.value) {
+        imageUploadRef.value.value = ''
       }
-    }
-  } catch (err) {
-    error.value = 'Failed to upload image: ' + err.message
-  } finally {
-    saving.value = false
-    // Reset the file input
-    if (imageUploadRef.value) {
-      imageUploadRef.value.value = ''
     }
   }
 }
@@ -713,9 +756,9 @@ function scrollToTab(index) {
   nextTick(() => {
     if (tabsContainer.value) {
       const tabs = tabsContainer.value.querySelectorAll('.recipe-tab')
-      // Tabs order: [new tab (index 0), newest recipe (index 1), ..., oldest recipe]
-      // Index -1 means new tab (first tab, index 0)
-      const targetIndex = index === -1 ? 0 : (index + 1) // +1 because new tab is first
+      // Tabs order: [recipe 0, recipe 1, ..., recipe N, new tab (last)]
+      // Index -1 means new tab (last tab)
+      const targetIndex = index === -1 ? tabs.length - 1 : index
       if (tabs[targetIndex]) {
         tabs[targetIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
       }
@@ -830,6 +873,25 @@ async function toggleEditMode() {
   }
 }
 
+// Helper function to get display image (handles both URLs and pending files)
+function getDisplayImage() {
+  if (isNewRecipe.value) {
+    // For new recipes, check editableRecipe for pending images
+    if (editableRecipe.value.pictures && editableRecipe.value.pictures.length > 0) {
+      const firstPic = editableRecipe.value.pictures[0]
+      if (typeof firstPic === 'string') {
+        return firstPic
+      } else if (firstPic && firstPic.preview) {
+        return firstPic.preview
+      }
+    }
+    return null
+  } else if (currentRecipe.value && currentRecipe.value.pictures && currentRecipe.value.pictures.length > 0) {
+    return currentRecipe.value.pictures[0]
+  }
+  return null
+}
+
 async function saveRecipe() {
   if (!dishIdFromRoute.value) return
   
@@ -857,11 +919,59 @@ async function saveRecipe() {
         // Check if this will be the first recipe before creating
         const wasFirstRecipe = sortedRecipes.value.length === 0
         
-        // Create new recipe
+        // Separate pending images from regular URLs
+        const pendingImages = []
+        const regularPictures = []
+        
+        if (editableRecipe.value.pictures) {
+          editableRecipe.value.pictures.forEach(pic => {
+            if (typeof pic === 'string') {
+              regularPictures.push(pic)
+            } else if (pic && pic.isPending && pic.file) {
+              pendingImages.push(pic)
+            } else if (pic && pic.preview) {
+              // If it's a pending image object, keep it for now
+              pendingImages.push(pic)
+            }
+          })
+        }
+        
+        // Create new recipe with only regular pictures (no pending uploads)
         const recipeId = await recipesStore.createRecipe({
           ...editableRecipe.value,
+          pictures: regularPictures,
           dish: dishId
         })
+        
+        // Upload any pending images after recipe is created
+        if (recipeId && pendingImages.length > 0) {
+          for (const pendingImage of pendingImages) {
+            if (pendingImage.file) {
+              try {
+                const result = await recipesStore.uploadRecipeImage(recipeId, pendingImage.file)
+                if (result?.image?.secureUrl) {
+                  regularPictures.push(result.image.secureUrl)
+                  // Clean up the preview URL
+                  if (pendingImage.preview) {
+                    URL.revokeObjectURL(pendingImage.preview)
+                  }
+                }
+              } catch (err) {
+                console.error('Failed to upload pending image:', err)
+                // Continue with other images
+              }
+            }
+          }
+          
+          // Update the recipe with all uploaded images
+          if (regularPictures.length > 0) {
+            await recipesStore.updateRecipe(recipeId, {
+              ...editableRecipe.value,
+              pictures: regularPictures,
+              dish: dishId
+            })
+          }
+        }
         
         // Reload recipes to get the newly created one
         await recipesStore.fetchRecipes(dishId)
@@ -899,9 +1009,45 @@ async function saveRecipe() {
         }
       }
     } else if (currentRecipe.value) {
-      // Update existing recipe
+      // For existing recipes, handle pending images
+      const pendingImages = []
+      const regularPictures = []
+      
+      if (editableRecipe.value.pictures) {
+        editableRecipe.value.pictures.forEach(pic => {
+          if (typeof pic === 'string') {
+            regularPictures.push(pic)
+          } else if (pic && pic.isPending && pic.file) {
+            pendingImages.push(pic)
+          }
+        })
+      }
+      
+      // Upload pending images first
+      if (pendingImages.length > 0) {
+        for (const pendingImage of pendingImages) {
+          if (pendingImage.file) {
+            try {
+              const result = await recipesStore.uploadRecipeImage(currentRecipe.value._id, pendingImage.file)
+              if (result?.image?.secureUrl) {
+                regularPictures.push(result.image.secureUrl)
+                // Clean up the preview URL
+                if (pendingImage.preview) {
+                  URL.revokeObjectURL(pendingImage.preview)
+                }
+              }
+            } catch (err) {
+              console.error('Failed to upload pending image:', err)
+              // Continue with other images
+            }
+          }
+        }
+      }
+      
+      // Update existing recipe with all pictures
       await recipesStore.updateRecipe(currentRecipe.value._id, {
         ...editableRecipe.value,
+        pictures: regularPictures,
         dish: dishId
       })
       await recipesStore.fetchRecipes(dishId)
@@ -1079,7 +1225,16 @@ async function setAsDefault(recipeId) {
 
 function formatDate(dateString) {
   if (!dateString) return 'Not set'
-  const date = new Date(dateString)
+  // Parse date string as local date to avoid timezone issues
+  let date
+  if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    // Parse as local date to avoid UTC timezone issues
+    const [year, month, day] = dateString.split('-').map(Number)
+    date = new Date(year, month - 1, day)
+  } else {
+    date = new Date(dateString)
+  }
+  if (isNaN(date.getTime())) return 'Not set'
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
@@ -1207,16 +1362,44 @@ async function goToRankings() {
 async function handleDeleteRecipe() {
   if (!currentRecipe.value || !currentRecipe.value._id) return
   
+  const recipeIdToDelete = currentRecipe.value._id
+  const dishId = dish.value?._id
+  
   try {
     saving.value = true
     error.value = ''
     
-    await recipeAPI.deleteRecipe(currentRecipe.value._id)
+    // Clear backup first to prevent watcher from restoring deleted recipe
+    const wasLastRecipe = recipesStore.recipes.length === 1
+    if (wasLastRecipe) {
+      recipesBackup.value = []
+    }
     
-    // Reload recipes
-    if (dish.value?._id) {
-      await recipesStore.fetchRecipes(dish.value._id)
-      // Update backup after fetching
+    // Call the delete API and wait for response
+    const response = await recipeAPI.deleteRecipe(recipeIdToDelete)
+    
+    // Check if deletion was successful
+    if (response.data?.error) {
+      error.value = response.data.error
+      return
+    }
+    
+    // Small delay to ensure backend syncs complete
+    await new Promise(resolve => setTimeout(resolve, 200))
+    
+    // Reload recipes and dish to ensure UI is up to date
+    if (dishId) {
+      // Fetch recipes first to get the updated list
+      await recipesStore.fetchRecipes(dishId)
+      
+      // Refresh the dish object to get updated recipes array
+      await recipesStore.fetchDish(dishId)
+      // Update local dish reference
+      if (recipesStore.currentDish) {
+        dish.value = { ...recipesStore.currentDish }
+      }
+      
+      // Update backup after fetching (this will be empty if no recipes remain)
       if (recipesStore.recipes && recipesStore.recipes.length > 0) {
         recipesBackup.value = [...recipesStore.recipes]
       } else {
@@ -1234,6 +1417,16 @@ async function handleDeleteRecipe() {
         isNewRecipe.value = true
         currentRecipeIndex.value = -1
         loadRecipeData(null)
+        // Clear editable recipe
+        editableRecipe.value = {
+          ingredientsList: '',
+          instructions: '',
+          note: '',
+          date: getLocalDateString(),
+          ranking: 1,
+          subname: '',
+          pictures: []
+        }
       }
     }
   } catch (err) {
@@ -1813,8 +2006,8 @@ onMounted(() => {
   padding-top: 0;
   position: relative;
   min-height: 400px;
-  /* Pale/orange brown background - lighter and more orange-tinted */
-  background-color: rgba(217, 154, 108, 0.4); /* var(--color-light-brown) with opacity - more pale/orange */
+  /* Transparent - let tab-content handle the background */
+  background-color: transparent;
 }
 
 .recipe-tabs-container {
@@ -1946,7 +2139,7 @@ onMounted(() => {
   min-height: 400px;
   max-height: calc(700px - 200px); /* Allow scrolling if content is tall */
   overflow-y: auto;
-  border-radius: 0 0 12px 12px;
+  border-radius: 12px 12px 12px 12px; /* Rounded on all corners including top */
   padding: 1.5rem;
   transition: background-color 0.3s;
   border: 2px solid var(--color-light-brown);
@@ -2128,8 +2321,8 @@ onMounted(() => {
 }
 
 .bookmark-home-overlay {
-  width: 40px !important;
-  height: 40px !important;
+  width: 35px !important;
+  height: 35px !important;
 }
 
 .bookmark-bg-hover,
