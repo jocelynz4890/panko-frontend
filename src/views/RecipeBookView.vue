@@ -23,7 +23,14 @@
         </div>
       </div>
       
-      <div class="notebook-wrapper">
+      <div 
+        class="notebook-wrapper panable-container"
+        ref="panableContainer"
+        @touchstart="handleTouchStart"
+        @touchmove="handleTouchMove"
+        @touchend="handleTouchEnd"
+        :style="{ transform: `translate(${panX}px, ${panY}px)` }"
+      >
         <div class="notebook">
           <!-- Book pages -->
           <div class="pages-container">
@@ -342,6 +349,14 @@ const renaming = ref(false)
 const showDeleteModal = ref(false)
 const deleteError = ref('')
 const deleting = ref(false)
+const panableContainer = ref(null)
+const panX = ref(0)
+const panY = ref(0)
+const isPanning = ref(false)
+const startX = ref(0)
+const startY = ref(0)
+const initialPanX = ref(0)
+const initialPanY = ref(0)
 
 // Check for view query parameter
 onMounted(() => {
@@ -774,6 +789,32 @@ watch(() => route.query.refresh, () => {
   // Reload when refresh param changes
   loadBookData()
 })
+
+// Touch panning handlers for mobile
+function handleTouchStart(e) {
+  if (e.touches.length === 1) {
+    isPanning.value = true
+    startX.value = e.touches[0].clientX
+    startY.value = e.touches[0].clientY
+    initialPanX.value = panX.value
+    initialPanY.value = panY.value
+  }
+}
+
+function handleTouchMove(e) {
+  if (!isPanning.value || e.touches.length !== 1) return
+  
+  e.preventDefault()
+  const deltaX = e.touches[0].clientX - startX.value
+  const deltaY = e.touches[0].clientY - startY.value
+  
+  panX.value = initialPanX.value + deltaX
+  panY.value = initialPanY.value + deltaY
+}
+
+function handleTouchEnd(e) {
+  isPanning.value = false
+}
 </script>
 
 <style scoped>
@@ -1559,6 +1600,46 @@ watch(() => route.query.refresh, () => {
 }
 
 @media (max-width: 768px) {
+  .recipe-book-container {
+    padding: 0;
+    overflow: hidden;
+    position: relative;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .book-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: var(--color-cream);
+    padding: 1rem;
+    margin: 0;
+  }
+  
+  .panable-container {
+    position: relative;
+    width: max-content;
+    min-width: 100%;
+    touch-action: none;
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: transform 0.1s ease-out;
+    flex: 1;
+    overflow: visible;
+  }
+  
+  .panable-container:active {
+    cursor: grabbing;
+  }
+  
+  .notebook-wrapper {
+    width: max-content;
+    min-width: 1000px;
+  }
+  
   .notebook {
     padding: 1rem;
   }
