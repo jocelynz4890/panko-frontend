@@ -239,18 +239,23 @@ async function loadData() {
       try {
         const response = await dishesAPI.getDish(dishId)
         const dishes = response.data.dishes || response.data
-        return Array.isArray(dishes) ? dishes[0] : dishes
+        const dish = Array.isArray(dishes) ? dishes[0] : dishes
+        // Ensure dish exists and has required properties
+        if (!dish || !dish._id) {
+          return null
+        }
+        return dish
       } catch (err) {
         console.error(`Failed to load dish ${dishId}:`, err)
         return null
       }
     })
     
-    const loadedDishes = (await Promise.all(dishPromises)).filter(d => d !== null)
+    const loadedDishes = (await Promise.all(dishPromises)).filter(d => d !== null && d !== undefined)
     
     // Load all recipes in parallel for dishes that have recipes
     const recipePromises = loadedDishes.map(async (dish) => {
-      if (dish.recipes && dish.recipes.length > 0) {
+      if (dish && dish.recipes && dish.recipes.length > 0) {
         try {
           const response = await recipeAPI.getRecipes(dish._id)
           const recipesData = response.data.recipes || response.data
