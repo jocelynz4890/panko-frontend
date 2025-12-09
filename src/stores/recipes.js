@@ -1,3 +1,6 @@
+// Pinia store that manages dishes and their associated recipes (snapshots).
+// Provides actions for loading a dish, creating/updating dishes and recipes,
+// and uploading images, while tracking loading and error state for the UI.
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { dishesAPI, recipeAPI } from '../api/api'
@@ -11,6 +14,14 @@ export const useRecipesStore = defineStore('recipes', () => {
 
   const authStore = useAuthStore()
 
+  /**
+   * Load a single dish by id and populate both `currentDish` and `recipes`.
+   * If the dish has recipes, this will also call `fetchRecipes` so the store
+   * always exposes the latest set of snapshots for that dish.
+   *
+   * @param {string} dishId - The Mongo-style id of the dish to load.
+   * @returns {Promise<object|null>} The loaded dish object, or null on failure.
+   */
   async function fetchDish(dishId) {
     loading.value = true
     error.value = null
@@ -39,6 +50,13 @@ export const useRecipesStore = defineStore('recipes', () => {
     }
   }
 
+  /**
+   * Fetch all recipes (snapshots) for a given dish and sort them
+   * chronologically by date, oldest to newest.
+   *
+   * @param {string} dishId - The id of the dish whose recipes should be loaded.
+   * @returns {Promise<Array>} The sorted array of recipe objects.
+   */
   async function fetchRecipes(dishId) {
     loading.value = true
     error.value = null
@@ -58,6 +76,13 @@ export const useRecipesStore = defineStore('recipes', () => {
     }
   }
 
+  /**
+   * Create a new dish for the currently authenticated user.
+   *
+   * @param {string} name - The display name of the dish.
+   * @param {string} description - Optional description or notes about the dish.
+   * @returns {Promise<object|null>} The created dish object from the backend.
+   */
   async function createDish(name, description) {
     if (!authStore.token) return null
     
@@ -74,6 +99,14 @@ export const useRecipesStore = defineStore('recipes', () => {
     }
   }
 
+  /**
+   * Update the basic metadata for an existing dish (name and description),
+   * then refresh `currentDish` so the store reflects the latest data.
+   *
+   * @param {string} dishId - The id of the dish to update.
+   * @param {string} newName - The new name to apply.
+   * @param {string} description - The updated description text.
+   */
   async function updateDish(dishId, newName, description) {
     loading.value = true
     error.value = null
@@ -88,6 +121,16 @@ export const useRecipesStore = defineStore('recipes', () => {
     }
   }
 
+  /**
+   * Create a new recipe (snapshot) for a dish, optionally with ingredients,
+   * instructions, ranking, and an explicit date. If a date is not provided,
+   * it defaults to the current day. After creation, the recipes list is
+   * refreshed so the UI shows the new snapshot.
+   *
+   * @param {object} recipeData - A structured payload with fields like
+   *   ingredientsList, subname, pictures, date, instructions, note, ranking, dish.
+   * @returns {Promise<string|null>} The id of the created recipe, if successful.
+   */
   async function createRecipe(recipeData) {
     if (!authStore.token) return null
     
@@ -129,6 +172,14 @@ export const useRecipesStore = defineStore('recipes', () => {
     }
   }
 
+  /**
+   * Update an existing recipe (snapshot) with new field values. If a dish id
+   * is provided in `recipeData`, the function will re-fetch that dish's
+   * recipes afterwards to keep the list in sync.
+   *
+   * @param {string} recipeId - The id of the recipe to update.
+   * @param {object} recipeData - The new recipe field values.
+   */
   async function updateRecipe(recipeId, recipeData) {
     loading.value = true
     error.value = null
@@ -160,6 +211,14 @@ export const useRecipesStore = defineStore('recipes', () => {
     }
   }
 
+  /**
+   * Mark a particular recipe as the default for a dish. This updates the
+   * backend and then adjusts `currentDish.defaultRecipe` locally without
+   * performing a full reload of the dish or clearing the recipes list.
+   *
+   * @param {string} recipeId - The id of the recipe to make default.
+   * @param {string} dishId - The id of the dish that owns the recipe.
+   */
   async function setDefaultRecipe(recipeId, dishId) {
     loading.value = true
     error.value = null
@@ -185,6 +244,14 @@ export const useRecipesStore = defineStore('recipes', () => {
     }
   }
 
+  /**
+   * Upload an image file for a specific recipe. The backend associates the
+   * uploaded file with the recipe and returns metadata about the upload.
+   *
+   * @param {string} recipeId - The id of the recipe to attach an image to.
+   * @param {File|Blob} file - The image file selected by the user.
+   * @returns {Promise<object|null>} Response data from the upload endpoint.
+   */
   async function uploadRecipeImage(recipeId, file) {
     if (!authStore.token) return null
     

@@ -1,3 +1,6 @@
+// Pinia store that coordinates calendar-based meal planning.
+// Manages scheduled recipes, batched drag-and-drop updates, and communication
+// with the calendar-related backend endpoints.
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { calendarAPI } from '../api/api'
@@ -11,6 +14,12 @@ export const useCalendarStore = defineStore('calendar', () => {
 
   const authStore = useAuthStore()
 
+  /**
+   * Fetch all scheduled recipes for the current user and normalize the
+   * backend response into a flat array of {_id, recipe, date} objects.
+   *
+   * @returns {Promise<void>}
+   */
   async function fetchScheduledRecipes() {
     if (!authStore.token) return
     
@@ -32,6 +41,15 @@ export const useCalendarStore = defineStore('calendar', () => {
     }
   }
 
+  /**
+   * Schedule a recipe on a specific date. When skipFetch is false, the store
+   * will automatically refresh the full list of scheduled recipes afterwards.
+   *
+   * @param {string} recipeId - The id of the recipe to schedule.
+   * @param {string} date - The date string (YYYY-MM-DD) to schedule on.
+   * @param {boolean} [skipFetch=false] - Whether to skip the follow-up reload.
+   * @returns {Promise<object|null>} The created scheduledRecipe payload.
+   */
   async function scheduleRecipe(recipeId, date, skipFetch = false) {
     if (!authStore.token) return null
     
@@ -55,6 +73,14 @@ export const useCalendarStore = defineStore('calendar', () => {
     }
   }
 
+  /**
+   * Remove a scheduled recipe by its id. When skipFetch is false, the store
+   * will re-fetch the calendar data to keep the UI consistent with the server.
+   *
+   * @param {string} scheduledRecipeId - The id of the scheduled recipe to delete.
+   * @param {boolean} [skipFetch=false] - Whether to skip the follow-up reload.
+   * @returns {Promise<object>} The backend response data.
+   */
   async function deleteScheduledRecipe(scheduledRecipeId, skipFetch = false) {
     if (!skipFetch) {
       loading.value = true
@@ -86,16 +112,34 @@ export const useCalendarStore = defineStore('calendar', () => {
     }
   }
 
+  /**
+   * Queue a local calendar change (add, delete, or move) to be submitted in
+   * a single batch, improving performance when the user makes many changes.
+   *
+   * @param {object} update - A description of the calendar operation to queue.
+   */
   function addPendingUpdate(update) {
     pendingUpdates.value.push(update)
   }
 
+  /**
+   * Clear all locally queued updates. The array is reset in a way that
+   * preserves reactivity so subscribers are properly notified.
+   */
   function clearPendingUpdates() {
     pendingUpdates.value.length = 0
     // Force reactivity update
     pendingUpdates.value = []
   }
 
+  /**
+   * Submit all queued calendar updates to the backend in conflict-aware,
+   * size-limited batches. This method attempts to resolve conflicts such as
+   * "move then delete" before sending requests and only clears the queue
+   * after confirming that all operations succeeded.
+   *
+   * @returns {Promise<void>}
+   */
   async function submitPendingUpdates() {
     if (pendingUpdates.value.length === 0) return
     

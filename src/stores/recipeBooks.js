@@ -1,3 +1,6 @@
+// Pinia store responsible for managing recipe books for the authenticated user.
+// Exposes reactive state for the list of books, the currently selected book,
+// and async actions for fetching, creating, editing, and deleting books.
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { recipeBookAPI } from '../api/api'
@@ -11,6 +14,12 @@ export const useRecipeBooksStore = defineStore('recipeBooks', () => {
 
   const authStore = useAuthStore()
 
+  /**
+   * Load all recipe books that belong to the current authenticated user.
+   * Uses the recipeBookAPI service to retrieve data from the backend.
+   *
+   * @returns {Promise<void>}
+   */
   async function fetchBooks() {
     if (!authStore.token) return
     
@@ -26,6 +35,14 @@ export const useRecipeBooksStore = defineStore('recipeBooks', () => {
     }
   }
 
+  /**
+   * Fetch a single recipe book by its id and set it as the currentBook.
+   * Some backend responses wrap the book in a "books" array; this function
+   * normalizes that shape to always expose a single book object.
+   *
+   * @param {string} bookId - The id of the recipe book to load.
+   * @returns {Promise<object|null>} The loaded book object, if found.
+   */
   async function fetchBook(bookId) {
     loading.value = true
     error.value = null
@@ -46,6 +63,14 @@ export const useRecipeBooksStore = defineStore('recipeBooks', () => {
     }
   }
 
+  /**
+   * Create a new recipe book with the given name and cover index, then
+   * refresh the list of books so the UI stays in sync with the backend.
+   *
+   * @param {string} name - Display name for the new recipe book.
+   * @param {number} coverIndex - Index of the cover asset to use.
+   * @returns {Promise<object|null>} The created book from the backend.
+   */
   async function createBook(name, coverIndex) {
     if (!authStore.token) return null
     
@@ -63,6 +88,12 @@ export const useRecipeBooksStore = defineStore('recipeBooks', () => {
     }
   }
 
+  /**
+   * Delete a recipe book by id and refresh the list of books afterwards.
+   *
+   * @param {string} bookId - The id of the book to delete.
+   * @returns {Promise<void>}
+   */
   async function deleteBook(bookId) {
     loading.value = true
     error.value = null
@@ -77,6 +108,14 @@ export const useRecipeBooksStore = defineStore('recipeBooks', () => {
     }
   }
 
+  /**
+   * Rename an existing recipe book. If the renamed book is currently
+   * selected, keep the local currentBook state in sync with the server.
+   *
+   * @param {string} bookId - The id of the book to rename.
+   * @param {string} newName - The new name to assign.
+   * @returns {Promise<void>}
+   */
   async function editBookName(bookId, newName) {
     loading.value = true
     error.value = null
@@ -95,6 +134,14 @@ export const useRecipeBooksStore = defineStore('recipeBooks', () => {
     }
   }
 
+  /**
+   * Add a dish to a specific recipe book. If that book is currently open,
+   * it is re-fetched so that its list of dishes stays up to date.
+   *
+   * @param {string} dishId - The id of the dish being added.
+   * @param {string} bookId - The id of the book that will contain the dish.
+   * @returns {Promise<void>}
+   */
   async function addDishToBook(dishId, bookId) {
     loading.value = true
     error.value = null

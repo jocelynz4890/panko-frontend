@@ -1,3 +1,6 @@
+// Pinia store that handles authentication state for the frontend application.
+// Responsible for logging users in and out, persisting tokens in localStorage,
+// and validating existing sessions with the backend.
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { authAPI } from '../api/api'
@@ -9,6 +12,13 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => !!user.value && !!token.value)
 
+  /**
+   * Persist an authenticated session into reactive state and localStorage.
+   *
+   * @param {string} userId - The unique id of the authenticated user.
+   * @param {string} authToken - The session token returned by the backend.
+   * @param {string} userUsername - The username associated with the user.
+   */
   function setAuth(userId, authToken, userUsername) {
     user.value = userId
     token.value = authToken
@@ -18,6 +28,10 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('username', userUsername)
   }
 
+  /**
+   * Clear all authentication-related state and remove any stored
+   * credentials from localStorage.
+   */
   function clearAuth() {
     user.value = null
     token.value = null
@@ -27,6 +41,16 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('username')
   }
 
+  /**
+   * Authenticate a user with the backend and create a session token.
+   * This method first calls the `authenticate` endpoint to verify
+   * credentials, then calls `createSession` to obtain a token and
+   * finally stores that token via `setAuth`.
+   *
+   * @param {string} username - The username entered by the user.
+   * @param {string} password - The plaintext password to authenticate with.
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
   async function login(username, password) {
     try {
       const response = await authAPI.authenticate(username, password)
@@ -87,6 +111,15 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /**
+   * Register a new user account and then automatically log in with
+   * the same credentials so that the app can proceed as an authenticated
+   * session without requiring an extra step from the user.
+   *
+   * @param {string} username - The username to register.
+   * @param {string} password - The password for the new account.
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
   async function register(username, password) {
     try {
       const response = await authAPI.register(username, password)
@@ -129,6 +162,12 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /**
+   * Validate any token stored in localStorage with the backend. If the
+   * token is invalid or mismatched, authentication state is cleared.
+   *
+   * @returns {Promise<boolean>} True if the token is valid, false otherwise.
+   */
   async function validateToken() {
     const storedUser = localStorage.getItem('user')
     const storedToken = localStorage.getItem('token')
@@ -159,6 +198,9 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /**
+   * Log out the current user by clearing all stored authentication data.
+   */
   function logout() {
     clearAuth()
   }
